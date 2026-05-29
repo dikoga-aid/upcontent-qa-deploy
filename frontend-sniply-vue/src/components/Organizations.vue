@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { api, type OrgSummary } from "../api";
 import { useTokenGetter } from "../useToken";
+
+// Derive an Auth0 org slug from the display name.
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 const getToken = useTokenGetter();
 const orgs = ref<OrgSummary[]>([]);
 const slug = ref("");
+const slugEdited = ref(false);
 const displayName = ref("");
+
+// Auto-fill the slug from the display name until the user edits the slug directly.
+watch(displayName, (v) => {
+  if (!slugEdited.value) slug.value = slugify(v);
+});
 const inviteOrg = ref("");
 const email = ref("");
 const msg = ref<{ kind: string; text: string } | null>(null);
@@ -21,6 +31,7 @@ async function create() {
     await api.createOrg(getToken, slug.value, displayName.value);
     msg.value = { kind: "success", text: `Created organization "${displayName.value}".` };
     slug.value = "";
+    slugEdited.value = false;
     displayName.value = "";
     await reload();
   } catch (e: any) {
@@ -73,6 +84,7 @@ async function invite() {
               v-model="slug"
               class="form-input"
               placeholder="acme-corp"
+              @input="slugEdited = true"
             />
             <span class="form-hint">Lowercase, hyphens only — used in Auth0 URLs</span>
           </div>

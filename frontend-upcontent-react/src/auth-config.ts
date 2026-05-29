@@ -6,13 +6,8 @@ export const API_SCOPES = [
   "profile",
   "email",
   "offline_access", // refresh tokens
-  "read:organizations",
-  "create:organizations",
-  "update:organizations",
-  "create:organization_invitations",
-  "read:organization_members",
-  "create:organization_member_roles",
-  "delete:organization_member_roles",
+  "read:organization",
+  "create:organization",
 ].join(" ");
 
 export const auth0Config = {
@@ -23,9 +18,13 @@ export const auth0Config = {
     audience: import.meta.env.VITE_AUTH0_AUDIENCE,
     scope: API_SCOPES,
   },
-  // Access token in memory only (never localStorage) — XSS-resistant.
-  cacheLocation: "memory" as const,
-  // Refresh tokens (rotating, with reuse detection enabled in Auth0).
+  // Persist tokens so the session survives a full page refresh (silent iframe
+  // re-auth is unreliable on localhost with third-party-cookie blocking). XSS
+  // risk is mitigated by the strict CSP + rotating refresh tokens w/ reuse detection.
+  cacheLocation: "localstorage" as const,
+  // Rotating refresh tokens (with reuse detection in Auth0) are the SOLE
+  // renewal mechanism — no deprecated iframe/silent-auth fallback. A scope
+  // change requires one fresh login to mint a refresh token covering it.
   useRefreshTokens: true,
 };
 

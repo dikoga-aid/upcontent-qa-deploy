@@ -4,13 +4,8 @@ export const API_SCOPES = [
   "profile",
   "email",
   "offline_access",
-  "read:organizations",
-  "create:organizations",
-  "update:organizations",
-  "create:organization_invitations",
-  "read:organization_members",
-  "create:organization_member_roles",
-  "delete:organization_member_roles",
+  "read:organization",
+  "create:organization",
 ].join(" ");
 
 export const auth0Options = {
@@ -21,8 +16,11 @@ export const auth0Options = {
     audience: import.meta.env.VITE_AUTH0_AUDIENCE,
     scope: API_SCOPES,
   },
-  // Token in memory only; rotating refresh tokens.
-  cacheLocation: "memory" as const,
+  // Persist tokens so the session survives a full page refresh. XSS risk is
+  // mitigated by the strict CSP + rotating refresh tokens with reuse detection.
+  cacheLocation: "localstorage" as const,
+  // Rotating refresh tokens are the SOLE renewal mechanism — no deprecated
+  // iframe/silent-auth fallback. A scope change requires one fresh login.
   useRefreshTokens: true,
 };
 

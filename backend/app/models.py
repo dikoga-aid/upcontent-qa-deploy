@@ -1,14 +1,13 @@
 """Plan catalog + request/response models.
 
-Plan catalog ported verbatim from ``model/Plan.java``:
-Starter $9 / Professional $29 / Enterprise $99, ids plan1/plan2/plan3.
+Plans: Starter $9 / Professional $29 / Enterprise $99 (ids plan1/plan2/plan3).
 """
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
-# ── Plan catalog (port of Plan.java) ────────────────────────────────────
+# ── Plan catalog ────────────────────────────────────────────────────────
 
 class Plan(BaseModel):
     id: str
@@ -27,7 +26,7 @@ PLANS: List[Plan] = [
 ]
 
 
-# ── Domain DTOs (mirror the Java records) ───────────────────────────────
+# ── Domain DTOs ─────────────────────────────────────────────────────────
 
 class OrgRole(BaseModel):
     id: str

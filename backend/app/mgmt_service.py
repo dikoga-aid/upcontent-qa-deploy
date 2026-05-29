@@ -1,9 +1,8 @@
 """Auth0 Management API client.
 
-Direct port of ``service/Auth0ManagementService.java``. JSON payloads are built
-as Python dicts (never via string formatting) so special characters in
-user-supplied values cannot inject malformed JSON. httpx is configured with
-explicit connect/read/write timeouts so requests never hang indefinitely.
+JSON payloads are built as Python dicts (never via string formatting) so
+special characters in user-supplied values cannot inject malformed JSON. httpx
+is configured with explicit timeouts so requests never hang indefinitely.
 
 Every path segment that originates from user input is validated upstream
 (see ``validators.py``) and URL-encoded here before interpolation.
@@ -110,7 +109,7 @@ class ManagementService:
 
         Without an enabled connection, invitation links fail (Auth0 has no way
         to authenticate the invited user). auto-membership is false so only
-        explicitly invited users join. Side effect kept from the Java port.
+        explicitly invited users join.
         """
         payload = {"name": name, "display_name": display_name}
         async with await self._client() as client:
@@ -170,6 +169,21 @@ class ManagementService:
         if resp.status_code >= 300:
             raise _mgmt_error("send invitation", resp)
         log.info("Invitation sent to '%s' for org '%s'", invitee_email, org_id)
+
+    # ── Members ────────────────────────────────────────────────────────
+
+    async def add_member_to_organization(self, org_id: str, user_id: str) -> None:
+        """POST /organizations/{org_id}/members. Requires create:organization_members.
+
+        user_id goes in the JSON body (not the URL), so no path-encoding is
+        needed; the dict payload is injection-safe.
+        """
+        payload = {"members": [user_id]}
+        async with await self._client() as client:
+            resp = await client.post(f"/organizations/{org_id}/members", json=payload)
+        if resp.status_code >= 300:
+            raise _mgmt_error("add member to org", resp)
+        log.info("Added member %s to org %s", user_id, org_id)
 
     # ── Org member roles ──────────────────────────────────────────────
 

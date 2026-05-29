@@ -1,9 +1,8 @@
 """Machine-to-Machine token provider for the Auth0 Management API.
 
-Port of ``config/Auth0ManagementTokenProvider.java``: fetches a token via the
-client_credentials grant (audience ``https://{domain}/api/v2/``), caches it
-in-process, and refreshes 60s before expiry. An ``asyncio.Lock`` ensures only
-one refresh happens at a time (the Java version used ``synchronized``).
+Fetches a token via the client_credentials grant (audience
+``https://{domain}/api/v2/``), caches it in-process, and refreshes 60s before
+expiry. An ``asyncio.Lock`` ensures only one refresh happens at a time.
 
 The M2M secret is read from config (backend env only) and is NEVER logged.
 """

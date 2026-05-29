@@ -28,7 +28,7 @@ from .validators import (
 log = logging.getLogger("upcontent.security")
 
 # Name of the tenant role that grants org-admin object-level rights.
-ADMIN_ROLE_NAMES = {"org admin", "admin", "organization admin"}
+ADMIN_ROLE_NAMES = {"org admin", "admin", "organization admin", "owner", "upcnt_owner"}
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -146,22 +146,40 @@ def _validated_org_id(org_id: str = Path(..., alias="org_id")) -> str:
         )
 
 
-async def require_org_member(
-    org_id: str = Depends(_validated_org_id),
-    principal: Principal = Depends(get_principal),
-) -> str:
-    """Verify the caller is a member of `org_id` via the Management API.
+async def assert_org_member(org_id: str, sub: str) -> None:
+    """Raise 403 unless `sub` is a member of `org_id` (live Management API check).
 
-    Returns the validated org_id. Raises 403 if not a member.
+    Usable inline (e.g. when org_id arrives in the request body).
     """
     from .mgmt_service import get_mgmt_service
 
-    orgs = await get_mgmt_service().list_organizations_for_user(principal.sub)
+    orgs = await get_mgmt_service().list_organizations_for_user(sub)
     if not any(o.id == org_id for o in orgs):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this organization.",
         )
+
+
+async def assert_org_admin(org_id: str, sub: str) -> None:
+    """Raise 403 unless `sub` is an owner/admin of `org_id` (member + admin role)."""
+    from .mgmt_service import get_mgmt_service
+
+    await assert_org_member(org_id, sub)
+    roles = await get_mgmt_service().get_roles_for_org_member(org_id, sub)
+    if not ({r.name.strip().lower() for r in roles} & ADMIN_ROLE_NAMES):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner or admin role required for this organization.",
+        )
+
+
+async def require_org_member(
+    org_id: str = Depends(_validated_org_id),
+    principal: Principal = Depends(get_principal),
+) -> str:
+    """Path-param dependency: caller must be a member of `org_id`. Returns it."""
+    await assert_org_member(org_id, principal.sub)
     return org_id
 
 
@@ -169,24 +187,6 @@ async def require_org_admin(
     org_id: str = Depends(_validated_org_id),
     principal: Principal = Depends(get_principal),
 ) -> str:
-    """Verify the caller is an ADMIN of `org_id` (member + admin role).
-
-    Returns the validated org_id. Raises 403 otherwise.
-    """
-    from .mgmt_service import get_mgmt_service
-
-    svc = get_mgmt_service()
-    orgs = await svc.list_organizations_for_user(principal.sub)
-    if not any(o.id == org_id for o in orgs):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a member of this organization.",
-        )
-    roles = await svc.get_roles_for_org_member(org_id, principal.sub)
-    role_names = {r.name.strip().lower() for r in roles}
-    if not (role_names & ADMIN_ROLE_NAMES):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required for this organization.",
-        )
+    """Path-param dependency: caller must be an owner/admin of `org_id`. Returns it."""
+    await assert_org_admin(org_id, principal.sub)
     return org_id

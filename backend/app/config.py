@@ -1,7 +1,7 @@
 """Application configuration, loaded from environment / .env via pydantic-settings.
 
-Mirrors the reference apps' discipline of keeping all environment-specific values
-out of code. The M2M secret lives here (backend env only) and is NEVER logged.
+All environment-specific values live here, not in code. The M2M secret is read
+from the backend environment only and is NEVER logged.
 """
 from functools import lru_cache
 from typing import List

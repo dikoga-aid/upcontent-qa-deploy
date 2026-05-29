@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuth0 } from "@auth0/auth0-vue";
 
-// Sniply landing — editorial hero mirroring the Java reference home page.
+// Sniply landing — editorial hero.
 // Preview cards tease plan tiers. Always a DEMO (banner + ribbon).
 const { loginWithRedirect } = useAuth0();
 

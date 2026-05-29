@@ -1,6 +1,6 @@
 import { useAuth0 } from "@auth0/auth0-react";
 
-// UpContent landing — editorial hero mirroring the Java reference home page.
+// UpContent landing — editorial hero.
 // The preview cards show plan tiers as a teaser. Always a DEMO (banner + ribbon).
 const PREVIEW_PLANS = [
   { label: "Starter", price: "$0", per: "/mo", featured: false },

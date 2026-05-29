@@ -2,11 +2,17 @@ import { useEffect, useState } from "react";
 import { api, OrgSummary } from "../api";
 import { useTokenGetter } from "../useApi";
 
+// Derive an Auth0 org slug from the display name:
+// lowercase, non-alphanumerics → hyphens, trim leading/trailing hyphens.
+const slugify = (s: string) =>
+  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 // Organizations: create, list (filtered to caller server-side), invite.
 export default function Organizations() {
   const getToken = useTokenGetter();
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [inviteOrg, setInviteOrg] = useState("");
   const [email, setEmail] = useState("");
@@ -23,6 +29,7 @@ export default function Organizations() {
       await api.createOrg(getToken, slug, displayName);
       setMsg({ kind: "success", text: `Created organization "${displayName}".` });
       setSlug("");
+      setSlugEdited(false);
       setDisplayName("");
       await reload();
     } catch (e: any) {
@@ -66,7 +73,11 @@ export default function Organizations() {
                 className="form-input"
                 id="displayName"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDisplayName(v);
+                  if (!slugEdited) setSlug(slugify(v));
+                }}
                 placeholder="Acme Corporation"
               />
               <span className="form-hint">Shown to users in Auth0</span>
@@ -79,7 +90,10 @@ export default function Organizations() {
                 className="form-input"
                 id="orgName"
                 value={slug}
-                onChange={(e) => setSlug(e.target.value)}
+                onChange={(e) => {
+                  setSlug(e.target.value);
+                  setSlugEdited(true);
+                }}
                 placeholder="acme-corp"
               />
               <span className="form-hint">

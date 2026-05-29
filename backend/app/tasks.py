@@ -1,11 +1,10 @@
-"""Integration tasks: validation + scope discipline in front of the Management
-service. This mirrors the reference apps' ``tasks.js`` (a thin orchestration
-layer that validates inputs and documents required scopes before performing
-privileged operations), keeping routers thin.
+"""Management API flows: thin orchestration that validates inputs and composes
+Management API calls into the app's operations (e.g. "create org" = create org +
+enable connection + add the creator as owner), keeping the routers thin.
 
 REQUIRED_MGMT_SCOPES documents the Management API scopes the server-side M2M
-client must hold for these tasks to succeed (least privilege). The user-token
-scopes are enforced separately, per route, in ``security.require_scopes``.
+client must hold (least privilege). User-token scopes are enforced separately,
+per route, in ``security.require_scopes``.
 """
 import logging
 from typing import List, Optional
@@ -30,6 +29,7 @@ REQUIRED_MGMT_SCOPES = [
     "create:organizations",
     "update:organizations",
     "create:organization_invitations",
+    "create:organization_members",
     "read:organization_members",
     "read:organization_member_roles",
     "create:organization_member_roles",
@@ -40,10 +40,40 @@ REQUIRED_MGMT_SCOPES = [
 ]
 
 
-async def create_organization(slug: str, display_name: str) -> str:
+# Role names that grant org-owner/admin (object-level) rights. The creator is
+# auto-assigned the first matching role at org creation.
+_ADMIN_ROLE_NAMES = {"org admin", "admin", "organization admin", "owner", "upcnt_owner"}
+
+
+async def create_organization(slug: str, display_name: str, creator_user_id: str) -> str:
     require_valid_org_slug(slug)
     require_valid_display_name(display_name)
-    return await get_mgmt_service().create_organization(slug, display_name)
+    svc = get_mgmt_service()
+    org_id = await svc.create_organization(slug, display_name)
+    # Associate the creator so the org appears in *their* list (object-level
+    # filter) and they can manage it. Best-effort — never fail the create.
+    try:
+        await svc.add_member_to_organization(org_id, creator_user_id)
+        admin_role = next(
+            (r for r in await svc.list_tenant_roles()
+             if r.name.strip().lower() in _ADMIN_ROLE_NAMES),
+            None,
+        )
+        if admin_role:
+            await svc.assign_roles_to_org_member(org_id, creator_user_id, [admin_role.id])
+        else:
+            log.warning(
+                "Org %s created but no admin-named role exists to grant creator %s; "
+                "added as member only (cannot invite/manage roles yet).",
+                org_id, creator_user_id,
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.error(
+            "Org %s created but could not associate creator %s: %s "
+            "(ensure the M2M holds create:organization_members).",
+            org_id, creator_user_id, exc,
+        )
+    return org_id
 
 
 async def list_user_organizations(user_id: str) -> List[OrgSummary]:

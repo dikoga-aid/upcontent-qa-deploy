@@ -1,11 +1,9 @@
-"""Central input validation for all user-supplied values before they are
-forwarded to the Auth0 Management API.
+"""Input validation for user-supplied values before they reach the Auth0
+Management API.
 
-Direct port of ``service/InputValidator.java`` (same regexes/limits), plus
-Auth0-ID validators (org / user / role) required by the hardened security
-model: path params are interpolated into Management API URLs, so they must be
-format-checked and URL-encoded before use (blocks path traversal / SSRF /
-query-param injection).
+Includes Auth0-ID validators (org / user / role): these ids are interpolated
+into Management API URLs, so they are format-checked and URL-encoded before use
+to block path traversal / SSRF / query-param injection.
 """
 import re
 from urllib.parse import quote
@@ -17,7 +15,7 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 # must start and end with a letter or number.
 ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9\-]{1,48}[a-z0-9]$")
 
-# Display name: printable ASCII, 1-100 length (port of \p{Print} for ASCII).
+# Display name: printable ASCII, 1-100 length.
 DISPLAY_NAME_PATTERN = re.compile(r"^[\x20-\x7E]{1,100}$")
 
 # ── Auth0 identifier shapes (path-param injection / SSRF guard) ─────────
@@ -45,7 +43,7 @@ def _sanitize(value: str) -> str:
     return cleaned[:40]
 
 
-# ── User-facing value validators (port of InputValidator) ───────────────
+# ── User-facing value validators ────────────────────────────────────────
 
 def require_valid_email(email: str) -> str:
     if not email or not email.strip():

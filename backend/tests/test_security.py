@@ -52,7 +52,7 @@ def _patch_jwks(monkeypatch):
 
 
 def _make_token(alg="RS256", aud=AUDIENCE, iss=ISSUER, exp_delta=3600,
-                scope="read:organizations", key=None, extra=None):
+                scope="read:organization", key=None, extra=None):
     now = int(time.time())
     payload = {
         "sub": "auth0|tester",
@@ -77,7 +77,7 @@ def _build_app():
         return {"sub": p.sub, "scopes": sorted(p.scopes)}
 
     @app.get("/needs-scope")
-    async def needs_scope(p: Principal = Depends(require_scopes("read:organizations"))):
+    async def needs_scope(p: Principal = Depends(require_scopes("read:organization"))):
         return {"ok": True}
 
     return TestClient(app, raise_server_exceptions=True)
@@ -159,7 +159,7 @@ def test_scope_enforced():
     r = client.get("/needs-scope", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
     # Token with the scope -> 200.
-    token2 = _make_token(scope="read:organizations")
+    token2 = _make_token(scope="read:organization")
     r2 = client.get("/needs-scope", headers={"Authorization": f"Bearer {token2}"})
     assert r2.status_code == 200
 
@@ -167,6 +167,6 @@ def test_scope_enforced():
 def test_permissions_array_merged():
     client = _build_app()
     # No scope string, but permissions array carries the grant.
-    token = _make_token(scope="", extra={"permissions": ["read:organizations"]})
+    token = _make_token(scope="", extra={"permissions": ["read:organization"]})
     r = client.get("/needs-scope", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200

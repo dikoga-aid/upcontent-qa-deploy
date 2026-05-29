@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "./auth-config";
 
-// Shared API helper (mirrors the references' thin tasks/api split). Attaches
-// the user access token as a Bearer header. On 401 the caller is sent back to
+// Shared API helper. Attaches the user access token as a Bearer header.
+// On 401 the caller is sent back to
 // login; on 403 a "missing permission/role" notice is surfaced.
 export type TokenGetter = () => Promise<string>;
 

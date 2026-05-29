@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/organizations", tags=["roles"])
 @router.get("/{org_id}/roles")
 async def list_roles(
     org_id: str = Depends(require_org_member),
-    _: Principal = Depends(require_scopes("read:organization_members")),
+    _: Principal = Depends(require_scopes("read:organization")),
 ) -> dict:
     """Members of the org (with roles) + the tenant role catalog."""
     try:
@@ -39,8 +39,8 @@ async def list_roles(
 @router.post("/{org_id}/roles/assign")
 async def assign_roles(
     body: RoleChangeRequest,
+    # Authorized object-level (owner/admin of this org), no token scope.
     org_id: str = Depends(require_org_admin),
-    _: Principal = Depends(require_scopes("create:organization_member_roles")),
 ) -> dict:
     try:
         await tasks.assign_roles(org_id, body.user_id, body.role_ids)
@@ -54,8 +54,8 @@ async def assign_roles(
 @router.post("/{org_id}/roles/remove")
 async def remove_roles(
     body: RoleChangeRequest,
+    # Authorized object-level (owner/admin of this org), no token scope.
     org_id: str = Depends(require_org_admin),
-    _: Principal = Depends(require_scopes("delete:organization_member_roles")),
 ) -> dict:
     try:
         await tasks.remove_roles(org_id, body.user_id, body.role_ids)
