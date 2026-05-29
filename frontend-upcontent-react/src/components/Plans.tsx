@@ -37,31 +37,97 @@ export default function Plans() {
     }
   };
 
+  const currentPlan = orgs.find((o) => o.id === orgId)?.selected_plan || null;
+
   return (
-    <div className="container">
-      <h2 className="section-title">Choose a plan</h2>
-      {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
-      <label>Organization</label>
-      <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-        {orgs.length === 0 && <option value="">No organizations yet</option>}
-        {orgs.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.display_name || o.name} {o.selected_plan ? `(${o.selected_plan})` : ""}
-          </option>
-        ))}
-      </select>
-      <div className="grid cols-3" style={{ marginTop: 18 }}>
-        {plans.map((p) => (
-          <div className="card" key={p.id}>
-            <h3>{p.display_name}</h3>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{p.price}</div>
-            <p className="muted">{p.description}</p>
-            <button className="btn" onClick={() => choose(p.id)}>
-              Select {p.display_name}
-            </button>
+    <main className="page-main">
+      <header className="page-header">
+        <h1 className="page-title">Choose your plan</h1>
+        <p className="page-sub">
+          Select the organization and the plan that applies to it.
+        </p>
+      </header>
+
+      {msg && <div className={`alert alert-${msg.kind}`}>{msg.text}</div>}
+
+      {/* ── Organization selector ── */}
+      <div className="org-selector-wrap">
+        <label className="form-label" htmlFor="orgPicker">
+          Organization
+        </label>
+        {orgs.length === 0 ? (
+          <div className="alert alert-error" style={{ maxWidth: 500 }}>
+            You are not a member of any organization. Create one in the
+            Organization tab first.
           </div>
-        ))}
+        ) : (
+          <>
+            <select
+              className="form-input form-select"
+              id="orgPicker"
+              style={{ maxWidth: 400 }}
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+            >
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.display_name || o.name}
+                  {o.selected_plan ? ` (${o.selected_plan})` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="form-hint" style={{ marginTop: 6 }}>
+              Plan will be applied to the selected organization.
+            </p>
+          </>
+        )}
       </div>
-    </div>
+
+      {/* ── Plan cards ── */}
+      <div className="plans-grid">
+        {plans.map((p) => {
+          const featured = p.display_name === "Professional";
+          const active = currentPlan != null && currentPlan === p.id;
+          return (
+            <div
+              className={`plan-card${featured ? " plan-card--featured" : ""}${
+                active ? " plan-card--active" : ""
+              }`}
+              key={p.id}
+            >
+              {featured && <div className="featured-badge">Most popular</div>}
+
+              <div className="plan-header">
+                <h2 className="plan-name">{p.display_name}</h2>
+                <div className="plan-price">{p.price}</div>
+                <p className="plan-desc">{p.description}</p>
+              </div>
+
+              {active && (
+                <div className="plan-check">
+                  <span className="check-icon">✓</span> Current plan
+                </div>
+              )}
+
+              <div className="plan-form">
+                <button
+                  className={`btn btn-full ${
+                    active
+                      ? "btn-selected"
+                      : featured
+                        ? "btn-primary"
+                        : "btn-outline"
+                  }`}
+                  disabled={active}
+                  onClick={() => choose(p.id)}
+                >
+                  {active ? "Current plan" : "Select plan"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </main>
   );
 }

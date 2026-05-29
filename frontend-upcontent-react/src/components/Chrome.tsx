@@ -9,6 +9,13 @@ export function DemoBanner() {
   );
 }
 
+const NAV_TABS: { id: string; label: string }[] = [
+  { id: "portal", label: "Profile" },
+  { id: "plans", label: "Plans" },
+  { id: "organizations", label: "Organization" },
+  { id: "roles", label: "Roles" },
+];
+
 export function Nav({
   tab,
   setTab,
@@ -17,46 +24,45 @@ export function Nav({
   setTab: (t: string) => void;
 }) {
   const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0();
-  const tabs = isAuthenticated
-    ? ["portal", "plans", "organizations", "roles"]
-    : [];
   return (
-    <div className="nav">
-      <span className="brand">
-        UpContent<span className="dot">.</span>
-      </span>
-      {tabs.map((t) => (
-        <button
-          key={t}
-          className={"btn ghost"}
-          style={{
-            textTransform: "capitalize",
-            opacity: tab === t ? 1 : 0.7,
-            borderColor: tab === t ? "#fff" : undefined,
-            color: "#fff",
-          }}
-          onClick={() => setTab(t)}
-        >
-          {t}
-        </button>
-      ))}
-      <span className="spacer" />
-      {isAuthenticated ? (
-        <>
-          <span className="muted" style={{ color: "#c7d0e8" }}>
-            {user?.name || user?.email}
-          </span>
-          <button
-            onClick={() =>
-              logout({ logoutParams: { returnTo: window.location.origin } })
-            }
-          >
-            Log out
-          </button>
-        </>
-      ) : (
-        <button onClick={() => loginWithRedirect()}>Log in</button>
-      )}
-    </div>
+    <nav className="nav">
+      <div className="nav-inner">
+        <span className="logo">
+          <img className="logo-img" src="/logo.svg" alt="UpContent" />
+        </span>
+        {isAuthenticated && (
+          <div className="nav-links">
+            {NAV_TABS.map((t) => (
+              <button
+                key={t.id}
+                className={`nav-link${tab === t.id ? " active" : ""}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="nav-user">
+          {isAuthenticated ? (
+            <>
+              <span className="nav-username">{user?.name || user?.email}</span>
+              <button
+                className="btn btn-ghost"
+                onClick={() =>
+                  logout({ logoutParams: { returnTo: window.location.origin } })
+                }
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => loginWithRedirect()}>
+              Sign in
+            </button>
+          )}
+        </div>
+      </div>
+    </nav>
   );
 }

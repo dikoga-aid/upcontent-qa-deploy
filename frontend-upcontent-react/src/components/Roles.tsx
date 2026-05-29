@@ -53,63 +53,142 @@ export default function Roles() {
     }
   };
 
-  return (
-    <div className="container">
-      <h2 className="section-title">Organization roles</h2>
-      {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
-      <label>Organization</label>
-      <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-        {orgs.length === 0 && <option value="">No organizations yet</option>}
-        {orgs.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.display_name || o.name}
-          </option>
-        ))}
-      </select>
+  const orgName = orgs.find((o) => o.id === orgId);
+  const orgLabel = orgName ? orgName.display_name || orgName.name : "";
 
-      <table style={{ marginTop: 16 }}>
-        <thead>
-          <tr>
-            <th>Member</th>
-            {tenantRoles.map((r) => (
-              <th key={r.id}>{r.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((m) => (
-            <tr key={m.user_id}>
-              <td>
-                <div style={{ fontWeight: 600 }}>{m.name || m.user_id}</div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {m.email}
-                </div>
-              </td>
-              {tenantRoles.map((r) => {
-                const has = m.roles.some((x) => x.id === r.id);
-                return (
-                  <td key={r.id}>
-                    <button
-                      className={`btn ${has ? "" : "ghost"}`}
-                      style={{ padding: "4px 10px", fontSize: 12 }}
-                      onClick={() => toggle(m, r)}
-                    >
-                      {has ? "Assigned" : "Assign"}
-                    </button>
-                  </td>
-                );
-              })}
-            </tr>
+  return (
+    <main className="page-main">
+      <header className="page-header">
+        <h1 className="page-title">
+          {orgLabel || "Organization"}
+          <span style={{ color: "var(--text-3)", fontSize: 24 }}> / Roles</span>
+        </h1>
+        <p className="page-sub">
+          Manage role assignments for members of this organization.
+        </p>
+      </header>
+
+      {msg && <div className={`alert alert-${msg.kind}`}>{msg.text}</div>}
+
+      <div className="org-selector-wrap">
+        <label className="form-label" htmlFor="rolesOrg">
+          Organization
+        </label>
+        <select
+          className="form-input form-select"
+          id="rolesOrg"
+          style={{ maxWidth: 400 }}
+          value={orgId}
+          onChange={(e) => setOrgId(e.target.value)}
+        >
+          {orgs.length === 0 && <option value="">No organizations yet</option>}
+          {orgs.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.display_name || o.name}
+            </option>
           ))}
-          {members.length === 0 && (
+        </select>
+      </div>
+
+      <section className="card card-wide">
+        <div className="section-header" style={{ marginBottom: 20 }}>
+          <span className="section-icon">👥</span>
+          <h2 className="card-title">Members &amp; roles</h2>
+          <span className="badge badge--neutral" style={{ marginLeft: 8 }}>
+            {members.length} member{members.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <table className="data-table">
+          <thead>
             <tr>
-              <td colSpan={1 + tenantRoles.length} className="muted">
-                No members to display (or you lack read access).
-              </td>
+              <th>Member</th>
+              <th>Current roles</th>
+              <th>Assign roles</th>
+              <th>User ID</th>
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {members.map((m) => (
+              <tr key={m.user_id}>
+                <td>
+                  <div className="member-cell">
+                    {m.picture ? (
+                      <img className="member-avatar" src={m.picture} alt="" />
+                    ) : (
+                      <div className="member-avatar-initials">
+                        {(m.name || m.email || "?").substring(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>
+                        {m.name || m.email}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+                        {m.email}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {m.roles.length === 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--text-3)" }}>
+                      No roles assigned
+                    </span>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {m.roles.map((role) => (
+                        <span className="role-chip" key={role.id}>
+                          <span>{role.name}</span>
+                          <button
+                            title="Remove role"
+                            onClick={() => toggle(m, role)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td>
+                  {tenantRoles.length === 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--text-3)" }}>
+                      No roles available
+                    </span>
+                  ) : (
+                    <div className="assign-checks">
+                      {tenantRoles.map((role) => {
+                        const has = m.roles.some((r) => r.id === role.id);
+                        return (
+                          <label key={role.id} title={role.description}>
+                            <input
+                              type="checkbox"
+                              checked={has}
+                              onChange={() => toggle(m, role)}
+                            />
+                            <span>{role.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </td>
+                <td>
+                  <code style={{ fontSize: 11 }}>{m.user_id}</code>
+                </td>
+              </tr>
+            ))}
+            {members.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ color: "var(--text-2)" }}>
+                  No members to display (or you lack read access).
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+    </main>
   );
 }

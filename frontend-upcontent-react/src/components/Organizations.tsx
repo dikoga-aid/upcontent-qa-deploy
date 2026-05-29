@@ -41,64 +41,150 @@ export default function Organizations() {
   };
 
   return (
-    <div className="container">
-      <h2 className="section-title">Organizations</h2>
-      {msg && <div className={`notice ${msg.kind}`}>{msg.text}</div>}
-      <div className="grid cols-2">
-        <div className="card">
-          <h3>Create organization</h3>
-          <label>Slug (lowercase, 3-50 chars)</label>
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-team" />
-          <label>Display name</label>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Acme Team"
-          />
-          <button className="btn" style={{ marginTop: 12 }} onClick={create}>
-            Create
-          </button>
-        </div>
-        <div className="card">
-          <h3>Invite a member</h3>
-          <label>Organization</label>
-          <select value={inviteOrg} onChange={(e) => setInviteOrg(e.target.value)}>
-            <option value="">Select an organization</option>
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.display_name || o.name}
-              </option>
-            ))}
-          </select>
-          <label>Invitee email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@example.com" />
-          <button className="btn" style={{ marginTop: 12 }} onClick={invite} disabled={!inviteOrg}>
-            Send invitation
-          </button>
-        </div>
+    <main className="page-main">
+      <header className="page-header">
+        <h1 className="page-title">Organization</h1>
+        <p className="page-sub">Create organizations and invite team members.</p>
+      </header>
+
+      {msg && <div className={`alert alert-${msg.kind}`}>{msg.text}</div>}
+
+      <div className="two-col">
+        {/* Create organization */}
+        <section className="card">
+          <div className="card-header">
+            <div className="card-icon">🏢</div>
+            <h2 className="card-title">Create organization</h2>
+            <p className="card-sub">Set up a new Auth0 organization for your team.</p>
+          </div>
+          <div className="form-stack">
+            <div className="form-group">
+              <label className="form-label" htmlFor="displayName">
+                Display name
+              </label>
+              <input
+                className="form-input"
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Acme Corporation"
+              />
+              <span className="form-hint">Shown to users in Auth0</span>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="orgName">
+                Organization ID (slug)
+              </label>
+              <input
+                className="form-input"
+                id="orgName"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="acme-corp"
+              />
+              <span className="form-hint">
+                Lowercase, hyphens only — used in Auth0 URLs
+              </span>
+            </div>
+            <button className="btn btn-primary btn-full" onClick={create}>
+              Create organization
+            </button>
+          </div>
+        </section>
+
+        {/* Invite a member */}
+        <section className="card">
+          <div className="card-header">
+            <div className="card-icon">✉️</div>
+            <h2 className="card-title">Invite a member</h2>
+            <p className="card-sub">Send an Auth0 invitation email to a team member.</p>
+          </div>
+          <div className="form-stack">
+            <div className="form-group">
+              <label className="form-label" htmlFor="orgSelect">
+                Select organization
+              </label>
+              <select
+                className="form-input form-select"
+                id="orgSelect"
+                value={inviteOrg}
+                onChange={(e) => setInviteOrg(e.target.value)}
+              >
+                <option value="" disabled>
+                  Choose an organization…
+                </option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.display_name || o.name}
+                  </option>
+                ))}
+              </select>
+              {orgs.length === 0 && (
+                <span className="form-hint">
+                  No organizations yet — create one first.
+                </span>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="inviteEmail">
+                Email address
+              </label>
+              <input
+                className="form-input"
+                id="inviteEmail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="colleague@example.com"
+              />
+              <span className="form-hint">
+                An invitation email will be sent via Auth0
+              </span>
+            </div>
+            <button
+              className="btn btn-primary btn-full"
+              disabled={!inviteOrg}
+              onClick={invite}
+            >
+              Send invitation
+            </button>
+          </div>
+        </section>
       </div>
 
-      <h2 className="section-title">Your organizations</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>ID</th>
-            <th>Plan</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orgs.map((o) => (
-            <tr key={o.id}>
-              <td>{o.display_name || o.name}</td>
-              <td>
-                <code>{o.id}</code>
-              </td>
-              <td>{o.selected_plan || "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+      {/* Existing organizations */}
+      {orgs.length > 0 && (
+        <section className="card card-wide">
+          <div className="card-header">
+            <div className="card-icon">📋</div>
+            <h2 className="card-title">Existing organizations</h2>
+          </div>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Display name</th>
+                <th>Slug</th>
+                <th>Auth0 ID</th>
+                <th>Plan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orgs.map((o) => (
+                <tr key={o.id}>
+                  <td>{o.display_name || "—"}</td>
+                  <td>
+                    <code>{o.name}</code>
+                  </td>
+                  <td>
+                    <code>{o.id}</code>
+                  </td>
+                  <td>{o.selected_plan || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </main>
   );
 }

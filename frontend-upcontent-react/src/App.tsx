@@ -13,18 +13,19 @@ export default function App() {
 
   return (
     <>
+      <div className="grid-bg" />
       <div className="demo-ribbon">DEMO</div>
       <DemoBanner />
       <Nav tab={tab} setTab={setTab} />
       {error && (
-        <div className="container">
-          <div className="notice error">Auth error: {error.message}</div>
-        </div>
+        <main className="page-main">
+          <div className="alert alert-error">Auth error: {error.message}</div>
+        </main>
       )}
       {isLoading ? (
-        <div className="container">
-          <p className="muted">Loading…</p>
-        </div>
+        <main className="page-main">
+          <p className="page-sub">Loading…</p>
+        </main>
       ) : !isAuthenticated ? (
         <Landing />
       ) : tab === "portal" ? (
