@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "upcontent-react",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend-upcontent-react",
+      "port": 3000
+    },
+    {
+      "name": "sniply-vue",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend-sniply-vue",
+      "port": 3001
+    }
+  ]
+}
