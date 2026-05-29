@@ -40,47 +40,112 @@ async function invite() {
 </script>
 
 <template>
-  <div class="container">
-    <h2 class="section-title">Organizations</h2>
-    <div v-if="msg" :class="`notice ${msg.kind}`">{{ msg.text }}</div>
-    <div class="grid cols-2">
-      <div class="card">
-        <h3>Create organization</h3>
-        <label>Slug (lowercase, 3-50 chars)</label>
-        <input v-model="slug" placeholder="acme-team" />
-        <label>Display name</label>
-        <input v-model="displayName" placeholder="Acme Team" />
-        <button class="btn" style="margin-top: 12px" @click="create">Create</button>
-      </div>
-      <div class="card">
-        <h3>Invite a member</h3>
-        <label>Organization</label>
-        <select v-model="inviteOrg">
-          <option value="">Select an organization</option>
-          <option v-for="o in orgs" :key="o.id" :value="o.id">
-            {{ o.display_name || o.name }}
-          </option>
-        </select>
-        <label>Invitee email</label>
-        <input v-model="email" placeholder="teammate@example.com" />
-        <button class="btn" style="margin-top: 12px" :disabled="!inviteOrg" @click="invite">
-          Send invitation
-        </button>
-      </div>
+  <main class="page-main">
+    <header class="page-header">
+      <h1 class="page-title">Organization</h1>
+      <p class="page-sub">Create organizations and invite team members.</p>
+    </header>
+
+    <div v-if="msg" :class="`alert alert-${msg.kind}`">{{ msg.text }}</div>
+
+    <div class="two-col">
+      <section class="card">
+        <div class="card-header">
+          <div class="card-icon">🏢</div>
+          <h2 class="card-title">Create organization</h2>
+          <p class="card-sub">Set up a new Auth0 organization for your team.</p>
+        </div>
+        <div class="form-stack">
+          <div class="form-group">
+            <label class="form-label" for="displayName">Display name</label>
+            <input
+              id="displayName"
+              v-model="displayName"
+              class="form-input"
+              placeholder="Acme Corporation"
+            />
+            <span class="form-hint">Shown to users in Auth0</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="orgName">Organization ID (slug)</label>
+            <input
+              id="orgName"
+              v-model="slug"
+              class="form-input"
+              placeholder="acme-corp"
+            />
+            <span class="form-hint">Lowercase, hyphens only — used in Auth0 URLs</span>
+          </div>
+          <button class="btn btn-primary btn-full" @click="create">
+            Create organization
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div class="card-icon">✉️</div>
+          <h2 class="card-title">Invite a member</h2>
+          <p class="card-sub">Send an Auth0 invitation email to a team member.</p>
+        </div>
+        <div class="form-stack">
+          <div class="form-group">
+            <label class="form-label" for="orgSelect">Select organization</label>
+            <select id="orgSelect" v-model="inviteOrg" class="form-input form-select">
+              <option value="" disabled>Choose an organization…</option>
+              <option v-for="o in orgs" :key="o.id" :value="o.id">
+                {{ o.display_name || o.name }}
+              </option>
+            </select>
+            <span v-if="orgs.length === 0" class="form-hint">
+              No organizations yet — create one first.
+            </span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inviteEmail">Email address</label>
+            <input
+              id="inviteEmail"
+              v-model="email"
+              type="email"
+              class="form-input"
+              placeholder="colleague@example.com"
+            />
+            <span class="form-hint">An invitation email will be sent via Auth0</span>
+          </div>
+          <button
+            class="btn btn-primary btn-full"
+            :disabled="!inviteOrg"
+            @click="invite"
+          >
+            Send invitation
+          </button>
+        </div>
+      </section>
     </div>
 
-    <h2 class="section-title">Your organizations</h2>
-    <table>
-      <thead>
-        <tr><th>Name</th><th>ID</th><th>Plan</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="o in orgs" :key="o.id">
-          <td>{{ o.display_name || o.name }}</td>
-          <td><code>{{ o.id }}</code></td>
-          <td>{{ o.selected_plan || "—" }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <section v-if="orgs.length > 0" class="card card-wide">
+      <div class="card-header">
+        <div class="card-icon">📋</div>
+        <h2 class="card-title">Existing organizations</h2>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Display name</th>
+            <th>Slug</th>
+            <th>Auth0 ID</th>
+            <th>Plan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="o in orgs" :key="o.id">
+            <td>{{ o.display_name || "—" }}</td>
+            <td><code>{{ o.name }}</code></td>
+            <td><code>{{ o.id }}</code></td>
+            <td>{{ o.selected_plan || "—" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
 </template>

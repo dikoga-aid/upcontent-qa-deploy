@@ -9,7 +9,12 @@ import Roles from "./components/Roles.vue";
 
 const { isAuthenticated, isLoading, user, error, loginWithRedirect, logout } = useAuth0();
 const tab = ref("portal");
-const tabs = ["portal", "plans", "organizations", "roles"];
+const tabs = [
+  { id: "portal", label: "Profile" },
+  { id: "plans", label: "Plans" },
+  { id: "organizations", label: "Organization" },
+  { id: "roles", label: "Roles" },
+];
 
 function doLogout() {
   logout({ logoutParams: { returnTo: window.location.origin } });
@@ -17,37 +22,46 @@ function doLogout() {
 </script>
 
 <template>
+  <div class="grid-bg" />
   <div class="demo-ribbon">DEMO</div>
   <div class="demo-banner">
     DEMO — not a production system; do not enter real credentials.
   </div>
 
-  <div class="nav">
-    <span class="brand">Sniply<span class="dot">.</span></span>
-    <template v-if="isAuthenticated">
-      <button
-        v-for="t in tabs"
-        :key="t"
-        class="btn ghost"
-        :style="{ textTransform: 'capitalize', opacity: tab === t ? 1 : 0.7 }"
-        @click="tab = t"
-      >
-        {{ t }}
-      </button>
-    </template>
-    <span class="spacer" />
-    <template v-if="isAuthenticated">
-      <span class="muted">{{ user?.name || user?.email }}</span>
-      <button class="btn" @click="doLogout">Log out</button>
-    </template>
-    <button v-else class="btn" @click="loginWithRedirect()">Log in</button>
-  </div>
+  <nav class="nav">
+    <div class="nav-inner">
+      <span class="logo">
+        <img class="logo-img" src="/logo.webp" alt="Sniply" />
+      </span>
+      <div v-if="isAuthenticated" class="nav-links">
+        <button
+          v-for="t in tabs"
+          :key="t.id"
+          :class="`nav-link${tab === t.id ? ' active' : ''}`"
+          @click="tab = t.id"
+        >
+          {{ t.label }}
+        </button>
+      </div>
+      <div class="nav-user">
+        <template v-if="isAuthenticated">
+          <span class="nav-username">{{ user?.name || user?.email }}</span>
+          <button class="btn btn-ghost" @click="doLogout">Sign out</button>
+        </template>
+        <button v-else class="btn btn-primary" @click="loginWithRedirect()">
+          Sign in
+        </button>
+      </div>
+    </div>
+  </nav>
 
-  <div v-if="error" class="container">
-    <div class="notice error">Auth error: {{ error.message }}</div>
-  </div>
+  <main v-if="error" class="page-main">
+    <div class="alert alert-error">Auth error: {{ error.message }}</div>
+  </main>
 
-  <div v-if="isLoading" class="container"><p class="muted">Loading…</p></div>
+  <main v-if="isLoading" class="page-main">
+    <p class="page-sub">Loading…</p>
+  </main>
   <Landing v-else-if="!isAuthenticated" />
   <Portal v-else-if="tab === 'portal'" />
   <Plans v-else-if="tab === 'plans'" />
