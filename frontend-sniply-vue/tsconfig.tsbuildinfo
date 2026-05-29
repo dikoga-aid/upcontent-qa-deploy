@@ -1,0 +1,1 @@
+{"root":["./src/api.ts","./src/auth-config.ts","./src/main.ts","./src/usetoken.ts","./src/app.vue","./src/components/landing.vue","./src/components/organizations.vue","./src/components/plans.vue","./src/components/portal.vue","./src/components/roles.vue","./vite-env.d.ts"],"version":"5.9.3"}
