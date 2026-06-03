@@ -50,7 +50,6 @@ async def create_organization(
 @router.post("/{org_id}/invitations", status_code=201)
 async def invite(
     body: InviteRequest,
-    # //TODO: this endpoint should require a token scope and avoid introspection
     # No token scope required: invite is authorized purely by being an owner/admin
     # of THIS org, verified live server-side (require_org_admin → Management API).
     # The owner role is assigned at org creation, so it takes effect immediately —

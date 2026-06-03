@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     )
 
     # ── Auth0 tenant / API ────────────────────────────────────────────
-    auth0_domain: str = "dev-rvvkxpvy18wueufd.us.auth0.com"
+    # Tenant domain (e.g. "your-tenant.us.auth0.com"). Required — from env/.env.
+    auth0_domain: str
     # The audience of THIS resource server (the Auth0 API identifier).
     auth0_api_audience: str = "https://upcontent-api"
 

@@ -28,7 +28,7 @@ export function Nav({
     <nav className="nav">
       <div className="nav-inner">
         <span className="logo">
-          <img className="logo-img" src="/logo.svg" alt="UpContent" />
+          <img className="logo-img" src="/logo.webp" alt="Sniply" />
         </span>
         {isAuthenticated && (
           <div className="nav-links">

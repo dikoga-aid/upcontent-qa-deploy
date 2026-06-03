@@ -31,7 +31,7 @@ function doLogout() {
   <nav class="nav">
     <div class="nav-inner">
       <span class="logo">
-        <img class="logo-img" src="/logo.webp" alt="Sniply" />
+        <img class="logo-img" src="/logo.svg" alt="UpContent" />
       </span>
       <div v-if="isAuthenticated" class="nav-links">
         <button
