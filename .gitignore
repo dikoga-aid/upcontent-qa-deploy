@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+
+# Auth0 Deploy-CLI config (contains the M2M secret) + exported tenant config
+# (confidential). Keep entirely out of the repo.
+auth0_config/
 **/.env
 **/.env.*
 !**/.env.example

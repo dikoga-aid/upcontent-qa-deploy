@@ -4,14 +4,14 @@ A teaching reference for real Auth0 patterns: PKCE SPA login, RS256/JWKS token
 validation, and Management API orchestration from a trusted backend.
 **DEMO — not for production.** Do not enter real credentials or protect real data.
 
-Two branded SPAs share one identity backend: **UpContent** (Vue, :3001) and
-**Sniply** (React, :3000). Both have full feature parity.
+Two branded SPAs share one identity backend: **UpContent** (Vue, :3000) and
+**Sniply** (React, :3001). Both have full feature parity.
 
 ## Architecture
 
 ```
-UpContent SPA (Vue   :3001) ─┐  PKCE → Auth0 Universal Login
-Sniply    SPA (React :3000) ─┘  └─ user access token (aud = https://upcontent-api)
+UpContent SPA (Vue   :3000) ─┐  PKCE → Auth0 Universal Login
+Sniply    SPA (React :3001) ─┘  └─ user access token (aud = https://upcontent-api)
         │  Authorization: Bearer <access token>
         ▼
 FastAPI resource server (:3003)
@@ -35,10 +35,10 @@ uvicorn app.main:app --host 127.0.0.1 --port 3003
 # curl -s http://127.0.0.1:3003/healthz  →  {"status":"ok"}
 pytest                   # validators + JWT validation (mocked JWKS)
 
-# UpContent SPA (Vue) — port 3001
+# UpContent SPA (Vue) — port 3000
 cd ../frontend-upcontent-vue && cp .env.example .env && npm install && npm run dev
 
-# Sniply SPA (React) — port 3000
+# Sniply SPA (React) — port 3001
 cd ../frontend-sniply-react && cp .env.example .env && npm install && npm run dev
 ```
 
@@ -83,7 +83,7 @@ The create-org flow assigns the first such role it finds to the org's creator.
 - **No database.** Auth0 is the system of record (users, orgs, roles, metadata).
   The backend is a stateless resource server that orchestrates the Management API.
 - **Port :3003.** The resource server listens on 127.0.0.1:3003; the two SPAs run
-  on :3001 (Vue) and :3000 (React) and are CORS-allowlisted explicitly (no `*`).
+  on :3000 (Vue) and :3001 (React) and are CORS-allowlisted explicitly (no `*`).
 
 ## Security notes
 
@@ -102,8 +102,8 @@ upcontent-auth0-demo/
 │   ├── app/{main,security,config,tasks,mgmt_token,mgmt_service,validators,models}.py
 │   ├── app/routes/{me,organizations,plans,roles}.py
 │   └── tests/{test_validators,test_security}.py
-├── frontend-upcontent-vue/      UpContent — Vite + Vue 3 + @auth0/auth0-vue (:3001)
-├── frontend-sniply-react/       Sniply — Vite + React + @auth0/auth0-react (:3000)
+├── frontend-upcontent-vue/      UpContent — Vite + Vue 3 + @auth0/auth0-vue (:3000)
+├── frontend-sniply-react/       Sniply — Vite + React + @auth0/auth0-react (:3001)
 ├── setup/provision_auth0.py     optional Auth0 provisioning via the M2M
 └── docs/                        handoff docs (see below)
 ```

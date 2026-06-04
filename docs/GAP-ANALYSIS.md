@@ -1,25 +1,48 @@
-# Gap Analysis
+# Gap Analysis (verified)
 
-Where the demo stands against the target end-state. Status: ✅ done · ◐ partial ·
-✗ not started. "Feedback #" references the 2026-05-22 architecture/config review.
-Paraphrased only — see the (confidential) source for full detail.
+Verified **2026-06-04** against the live tenant export (`a0deploy export`), the repo
+code, and the A&D v2. Status: ✅ done · ◐ partial · ✗ not started · ⚠️ inconsistent.
+"#" references the 2026-05-22 review. Paraphrased — see the (confidential) A&D for detail.
 
-| Capability | Status | Feedback # | Note |
+| Capability | Status | # | Verified state (tenant vs code) |
 |---|---|---|---|
-| PKCE login (Authorization Code + PKCE, no client secret in browser) | ✅ | — | Both SPAs via Auth0 SDKs. |
-| JWT validation (RS256 / JWKS, iss/aud/exp; reject alg:none, HS256, ID tokens) | ✅ | — | `app/security.py`. |
-| M2M Management API orchestration (cached client_credentials token) | ✅ | — | `mgmt_token.py` / `mgmt_service.py`. |
-| Org-level plan metadata (plan stored on the org, not the user) | ✅ | #1 | `PATCH /organizations/{id}` via Management API. |
-| Create-org + owner flow (org → connection → member → owner role) | ✅ | — | `tasks.create_organization`. |
-| Invitations (object-level authorized; immediate effect, no refresh) | ✅ | — | `POST /organizations/{org_id}/invitations`. |
-| Roles (list members + tenant roles; assign / remove) | ✅ | — | RBAC via Management API. |
-| Object-level per-org authorization (live ownership check) | ✅ | — | Not a token scope; takes effect immediately. |
-| Owner role 1:1 per-org enforcement (app-layer; Auth0 can't model it) | ◐ | #10 | Owner role assigned at create; uniqueness not yet enforced. |
-| Org picker / org-scoped login (single = auto, multiple = picker) | ✗ | #8 | No org selection at login; org chosen in-app. |
-| Migration toolkit (user import w/ pbkdf2_sha512 → orgs → user-org + RBAC) | ✗ | #4 / #5 | Not built; sequencing + role-to-metadata gap documented in ROADMAP. |
-| App / audience split + Sniply social connections | ◐ | #16 | Two SPA apps now branded correctly; still one shared `upcontent-api` audience; Sniply social (Google/Twitter/Facebook/Buffer) not configured. |
-| MFA | ✗ | #6 | Scoped but post-MVP. |
-| Impersonation / token exchange (RFC 8693) | ✗ | #12 | Pending design; Login Tickets approach dropped. |
-| DataDog / SIEM log stream | ✗ | #7 | MVP-required per review; tenant log stream not configured. |
-| First-party / third-party consent policy | ✗ | #9 | Disable first-party, enable third-party — not yet set. |
-| Attack Protection (bot detection, brute-force, breached-password) | ✗ | #15 | Tenant setting not enabled. |
+| PKCE SPA login | ✅ | — | `UpContent SPA` + `Sniply` clients are SPA/auth=none, rotating refresh; both apps use auth0 SDKs. |
+| JWT validation (RS256/JWKS, iss/aud/exp) | ✅ | — | `app/security.py`. API `UpContent Services` = `https://upcontent-api`, RS256. |
+| M2M Management orchestration | ✅ | — | `MGM API` client grant holds the 12 Mgmt scopes incl. `create:organization_members`. |
+| Create-org → owner flow | ✅ | — | `tasks.create_organization`; tenant has orgs with members + `upcnt_owner`. |
+| Invitations / Roles (object-level authz) | ✅ | — | Live ownership check; `upcnt_*` roles exist in tenant. |
+| Add-claims action (org context) | ✅ | — | Deployed post-login **"Add Custom Claims"** stamps `https://upcontent.com/{plan,roles,org_id,org_name}`. |
+| DataDog / SIEM log stream | ✅ | #7 | **Already configured** in tenant (PII-hashed). (Earlier analysis wrongly marked this missing.) |
+| Attack Protection | ◐ | #15 | brute-force + suspicious-IP **on**; bot-detection **monitoring-only**; breached-password **off**. |
+| Org picker / org-scoped login | ◐ | #8 | **Configured** on `UpContent SPA` (`organization_usage=require`, `post_login_prompt`); app code doesn't manage org context, and new users (0 orgs) can't pass the required picker. |
+| MFA | ◐ | #6 | Factors **on** (OTP/email/WebAuthn-platform), **no enforcement policy** — matches post-MVP. |
+| Role → permission model (Table 5) | ◐ | #10 | Only `upcnt_owner` has permissions (`invite:organizationUser`,`update:organization`); admin/editor/manager/reviewer empty. Owner 1:1 uniqueness not enforced. |
+| Self-registration → account/org | ◐ | — | Post-registration **"Sync user and create account"** action exists but **not deployed**; expects backend `/auth0/sync` (not in the demo). |
+| Plan system of record | ⚠️ | #1 | **Split 3 ways** — see Reconciliation #1. Decision: **org metadata** is canonical. |
+| App / audience split + Sniply social | ◐ | #16 | Separate `Sniply` client exists; **only `google-oauth2`** social connection (no Twitter/Facebook/Buffer); single shared `upcontent-api` audience. |
+| Impersonation / RFC 8693 | ✗ | #12 | Not present; pending design (no Login Tickets). |
+| Client/port alignment | ✅ | — | **Fixed 2026-06-04**: UpContent(Vue)→:3000 (`UpContent SPA`), Sniply(React)→:3001 (`Sniply`); matched Sniply's trailing-slash callback. |
+
+## Reconciliation notes
+
+1. **Plan system of record → org metadata (decided).** Today the value lives in three
+   places that disagree:
+   - demo backend writes/reads `org.metadata.selected_plan`
+   - the deployed **Add Custom Claims** action reads `org.metadata.plan`
+   - the **Plan Selection** Form → **Update User** Flow writes **user `app_metadata.subscription`**
+   Align all to **`org.metadata.selected_plan`**: repoint the Form/Flow to write org metadata
+   (not user), change the claims action to read `selected_plan`, and standardize the plan
+   catalog (the Form shows `Plan1/2/3 + Free Trial` at $95/$265/Request; the demo uses
+   `plan1-3` at $9/$29/$99 — pick one set of ids + prices).
+2. **Org picker chicken-and-egg.** `UpContent SPA` requires an org at login. A brand-new
+   user has no org and cannot complete the required picker — resolved by deploying the
+   self-registration action (creates an org on signup). Existing org members are unaffected.
+3. **Self-reg/account flow.** Deploy "Sync user and create account" and add a backend
+   `/auth0/sync` endpoint, or drop the action if accounts are created another way.
+4. **Tenant hygiene.** Remove stale apps (`Mikes Angular App`, `Mikes Demo App`,
+   `My Angular App`, `test`) and the leftover `addPlan` API scope; populate permissions on
+   the non-owner roles; add Sniply social connections if in scope.
+5. **API authorization.** `UpContent Services` uses `subject_type_authorization.user: allow_all`
+   and `token_dialect: access_token` — any signed-in user can request the API's scopes, and
+   RBAC permissions are not auto-added to the token. This is compatible with the demo's
+   object-level (server-side) authorization, but should be a deliberate decision vs. RBAC-gated.

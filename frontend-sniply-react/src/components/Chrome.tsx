@@ -50,7 +50,7 @@ export function Nav({
               <button
                 className="btn btn-ghost"
                 onClick={() =>
-                  logout({ logoutParams: { returnTo: window.location.origin } })
+                  logout({ logoutParams: { returnTo: window.location.origin + "/" } })
                 }
               >
                 Sign out
