@@ -40,12 +40,25 @@ REQUIRED_MGMT_SCOPES = [
 ]
 
 
-# Role names that grant org-owner/admin (object-level) rights. The creator is
-# auto-assigned the first matching role at org creation.
+# Role names that grant org-owner/admin (object-level) rights.
 _ADMIN_ROLE_NAMES = {"org admin", "admin", "organization admin", "owner", "upcnt_owner"}
+# The single-owner role. An org has at most one member holding it (A&D: owner is
+# 1:1 per org). Admins may be many; only the owner is unique.
+OWNER_ROLE_NAMES = {"owner", "upcnt_owner"}
 
 
-async def create_organization(slug: str, display_name: str, creator_user_id: str) -> str:
+class OwnerConflictError(Exception):
+    """Raised when assigning an owner role would create a second org owner."""
+
+
+async def create_organization(
+    slug: str,
+    display_name: str,
+    creator_user_id: str,
+    pending_plan: Optional[str] = None,
+) -> tuple[str, Optional[str]]:
+    """Create an org, make the creator its owner, and (if a signup `pending_plan`
+    was carried in the token) apply it. Returns (org_id, applied_plan_or_None)."""
     require_valid_org_slug(slug)
     require_valid_display_name(display_name)
     svc = get_mgmt_service()
@@ -54,16 +67,20 @@ async def create_organization(slug: str, display_name: str, creator_user_id: str
     # filter) and they can manage it. Best-effort — never fail the create.
     try:
         await svc.add_member_to_organization(org_id, creator_user_id)
-        admin_role = next(
-            (r for r in await svc.list_tenant_roles()
-             if r.name.strip().lower() in _ADMIN_ROLE_NAMES),
-            None,
+        roles = await svc.list_tenant_roles()
+        # Make the creator the org owner (prefer an owner-named role; fall back
+        # to any admin-named role so they can at least manage the org).
+        first_owner = next(
+            (r for r in roles if r.name.strip().lower() in OWNER_ROLE_NAMES), None
         )
-        if admin_role:
-            await svc.assign_roles_to_org_member(org_id, creator_user_id, [admin_role.id])
+        grant_role = first_owner or next(
+            (r for r in roles if r.name.strip().lower() in _ADMIN_ROLE_NAMES), None
+        )
+        if grant_role:
+            await svc.assign_roles_to_org_member(org_id, creator_user_id, [grant_role.id])
         else:
             log.warning(
-                "Org %s created but no admin-named role exists to grant creator %s; "
+                "Org %s created but no owner/admin-named role exists to grant creator %s; "
                 "added as member only (cannot invite/manage roles yet).",
                 org_id, creator_user_id,
             )
@@ -73,7 +90,18 @@ async def create_organization(slug: str, display_name: str, creator_user_id: str
             "(ensure the M2M holds create:organization_members).",
             org_id, creator_user_id, exc,
         )
-    return org_id
+    # Apply the signup-time plan (from the `pending_plan` token claim). Best-effort:
+    # the org exists regardless; the plan can still be set from the Plans tab.
+    applied_plan: Optional[str] = None
+    if pending_plan:
+        try:
+            require_valid_plan(pending_plan)
+            await svc.update_org_plan(org_id, pending_plan)
+            applied_plan = pending_plan
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Org %s created but could not apply pending plan %r: %s",
+                        org_id, pending_plan, exc)
+    return org_id, applied_plan
 
 
 async def list_user_organizations(user_id: str) -> List[OrgSummary]:
@@ -117,7 +145,29 @@ async def assign_roles(org_id: str, user_id: str, role_ids: List[str]) -> None:
     require_valid_user_id(user_id)
     for rid in role_ids:
         require_valid_role_id(rid)
-    await get_mgmt_service().assign_roles_to_org_member(org_id, user_id, role_ids)
+    svc = get_mgmt_service()
+    await _assert_single_owner(svc, org_id, user_id, role_ids)
+    await svc.assign_roles_to_org_member(org_id, user_id, role_ids)
+
+
+async def _assert_single_owner(svc, org_id: str, user_id: str, role_ids: List[str]) -> None:
+    """Enforce one owner per org (A&D). Auth0 has no native constraint for this,
+    so the app checks live against the Management API: if the assignment includes
+    an owner role and a *different* member already holds one, reject it."""
+    tenant_roles = await svc.list_tenant_roles()
+    owner_role_ids = {
+        r.id for r in tenant_roles if r.name.strip().lower() in OWNER_ROLE_NAMES
+    }
+    if not owner_role_ids or not (set(role_ids) & owner_role_ids):
+        return  # not assigning an owner role; nothing to enforce
+    for member in await svc.list_org_members_with_roles(org_id):
+        if member.user_id == user_id:
+            continue
+        if {r.id for r in member.roles} & owner_role_ids:
+            raise OwnerConflictError(
+                "This organization already has an owner. Remove the current "
+                "owner or transfer ownership before assigning a new one."
+            )
 
 
 async def remove_roles(org_id: str, user_id: str, role_ids: List[str]) -> None:

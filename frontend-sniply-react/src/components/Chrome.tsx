@@ -9,20 +9,7 @@ export function DemoBanner() {
   );
 }
 
-const NAV_TABS: { id: string; label: string }[] = [
-  { id: "portal", label: "Profile" },
-  { id: "plans", label: "Plans" },
-  { id: "organizations", label: "Organization" },
-  { id: "roles", label: "Roles" },
-];
-
-export function Nav({
-  tab,
-  setTab,
-}: {
-  tab: string;
-  setTab: (t: string) => void;
-}) {
+export function Nav() {
   const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0();
   return (
     <nav className="nav">
@@ -30,19 +17,6 @@ export function Nav({
         <span className="logo">
           <img className="logo-img" src="/logo.webp" alt="Sniply" />
         </span>
-        {isAuthenticated && (
-          <div className="nav-links">
-            {NAV_TABS.map((t) => (
-              <button
-                key={t.id}
-                className={`nav-link${tab === t.id ? " active" : ""}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="nav-user">
           {isAuthenticated ? (
             <>

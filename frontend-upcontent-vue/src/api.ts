@@ -68,6 +68,9 @@ export interface OrgMember {
 export const api = {
   me: (t: TokenGetter) => request<any>(t, "GET", "/api/me"),
   plans: (t: TokenGetter) => request<Plan[]>(t, "GET", "/api/plans"),
+  // Public plan catalog (no token) — for the logged-out pricing / sign-up page.
+  plansPublic: () =>
+    fetch(`${API_BASE_URL}/api/plans`).then((r) => r.json() as Promise<Plan[]>),
   listOrgs: (t: TokenGetter) => request<OrgSummary[]>(t, "GET", "/api/organizations"),
   createOrg: (t: TokenGetter, name: string, display_name: string) =>
     request<OrgSummary>(t, "POST", "/api/organizations", { name, display_name }),

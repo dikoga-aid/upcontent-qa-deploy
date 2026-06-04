@@ -100,7 +100,7 @@ async def get_principal(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.auth0_api_audience,
+            audience=settings.auth0_api_audiences,
             issuer=settings.issuer,
             leeway=60,
             options={"require": ["exp", "iat", "iss", "aud"]},

@@ -9,6 +9,7 @@ import Roles from "./components/Roles.vue";
 
 const { isAuthenticated, isLoading, user, error, loginWithRedirect, logout } = useAuth0();
 const tab = ref("portal");
+const publicView = ref<"landing" | "plans">("landing");
 const tabs = [
   { id: "portal", label: "Profile" },
   { id: "plans", label: "Plans" },
@@ -43,6 +44,20 @@ function doLogout() {
           {{ t.label }}
         </button>
       </div>
+      <div v-else class="nav-links">
+        <button
+          :class="`nav-link${publicView === 'landing' ? ' active' : ''}`"
+          @click="publicView = 'landing'"
+        >
+          Home
+        </button>
+        <button
+          :class="`nav-link${publicView === 'plans' ? ' active' : ''}`"
+          @click="publicView = 'plans'"
+        >
+          Plans
+        </button>
+      </div>
       <div class="nav-user">
         <template v-if="isAuthenticated">
           <span class="nav-username">{{ user?.name || user?.email }}</span>
@@ -62,7 +77,10 @@ function doLogout() {
   <main v-if="isLoading" class="page-main">
     <p class="page-sub">Loading…</p>
   </main>
-  <Landing v-else-if="!isAuthenticated" />
+  <template v-else-if="!isAuthenticated">
+    <Plans v-if="publicView === 'plans'" />
+    <Landing v-else />
+  </template>
   <Portal v-else-if="tab === 'portal'" />
   <Plans v-else-if="tab === 'plans'" />
   <Organizations v-else-if="tab === 'organizations'" />

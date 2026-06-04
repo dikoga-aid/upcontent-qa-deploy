@@ -42,58 +42,20 @@ async function request<T>(
   return data as T;
 }
 
-export interface OrgSummary {
-  id: string;
-  name: string;
-  display_name: string;
-  selected_plan: string | null;
-}
-export interface Plan {
-  id: string;
-  display_name: string;
-  description: string;
-  price: string;
-}
-export interface OrgRole {
-  id: string;
-  name: string;
-  description: string;
-}
-export interface OrgMember {
-  user_id: string;
-  name: string;
-  email: string;
-  picture: string | null;
-  roles: OrgRole[];
+// Sniply authenticates against its own API audience (https://sniply-api) with no
+// org scopes, so it only reads identity + the org context the post-login action
+// stamped into the token. Org/plan/role *management* lives in UpContent.
+export interface Me {
+  sub: string;
+  org_id: string | null;
+  org_name: string | null;
+  plan: string | null;
+  roles: string[];
+  permissions: string[];
+  email: string | null;
+  name: string | null;
 }
 
 export const api = {
-  me: (t: TokenGetter) => request<any>(t, "GET", "/api/me"),
-  plans: (t: TokenGetter) => request<Plan[]>(t, "GET", "/api/plans"),
-  listOrgs: (t: TokenGetter) => request<OrgSummary[]>(t, "GET", "/api/organizations"),
-  createOrg: (t: TokenGetter, name: string, display_name: string) =>
-    request<OrgSummary>(t, "POST", "/api/organizations", { name, display_name }),
-  selectPlan: (t: TokenGetter, org_id: string, plan: string) =>
-    request<any>(t, "POST", "/api/plan/select", { org_id, plan }),
-  invite: (t: TokenGetter, orgId: string, email: string, inviter_name?: string) =>
-    request<any>(t, "POST", `/api/organizations/${orgId}/invitations`, {
-      email,
-      inviter_name,
-    }),
-  listRoles: (t: TokenGetter, orgId: string) =>
-    request<{ org_id: string; members: OrgMember[]; tenant_roles: OrgRole[] }>(
-      t,
-      "GET",
-      `/api/organizations/${orgId}/roles`,
-    ),
-  assignRoles: (t: TokenGetter, orgId: string, user_id: string, role_ids: string[]) =>
-    request<any>(t, "POST", `/api/organizations/${orgId}/roles/assign`, {
-      user_id,
-      role_ids,
-    }),
-  removeRoles: (t: TokenGetter, orgId: string, user_id: string, role_ids: string[]) =>
-    request<any>(t, "POST", `/api/organizations/${orgId}/roles/remove`, {
-      user_id,
-      role_ids,
-    }),
+  me: (t: TokenGetter) => request<Me>(t, "GET", "/api/me"),
 };

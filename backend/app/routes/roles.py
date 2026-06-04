@@ -47,6 +47,8 @@ async def assign_roles(
         return {"status": "assigned", "count": len(body.role_ids)}
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except tasks.OwnerConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ManagementApiError:
         raise HTTPException(status_code=502, detail="Could not assign roles.")
 

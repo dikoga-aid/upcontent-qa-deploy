@@ -1,13 +1,11 @@
-// Least-privilege scope list requested by the SPA. Standard OIDC scopes plus
-// the API permissions the UI actually exercises. Auth0 grants the subset the
-// user is authorized for (via RBAC roles); the backend enforces the rest.
+// Sniply is an authentication-only demo against its own API audience
+// (https://sniply-api), which defines no org scopes, so it requests just the
+// standard OIDC scopes. Org/plan/role management (and its scopes) live in UpContent.
 export const API_SCOPES = [
   "openid",
   "profile",
   "email",
   "offline_access", // refresh tokens
-  "read:organization",
-  "create:organization",
 ].join(" ");
 
 export const auth0Config = {
