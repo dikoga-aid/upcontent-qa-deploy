@@ -170,3 +170,23 @@ def test_permissions_array_merged():
     token = _make_token(scope="", extra={"permissions": ["read:organization"]})
     r = client.get("/needs-scope", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
+
+
+def test_second_audience_accepted(monkeypatch):
+    # Per-app API split: a token minted for the Sniply API audience is accepted.
+    monkeypatch.setenv("AUTH0_API_AUDIENCE", f"{AUDIENCE},https://sniply-api")
+    get_settings.cache_clear()
+    client = _build_app()
+    token = _make_token(aud="https://sniply-api")
+    r = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+
+def test_unlisted_audience_rejected(monkeypatch):
+    # An audience outside the accepted list is still rejected.
+    monkeypatch.setenv("AUTH0_API_AUDIENCE", f"{AUDIENCE},https://sniply-api")
+    get_settings.cache_clear()
+    client = _build_app()
+    token = _make_token(aud="https://other-api")
+    r = client.get("/whoami", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
