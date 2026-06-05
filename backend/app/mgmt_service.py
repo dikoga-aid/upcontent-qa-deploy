@@ -1,25 +1,24 @@
-"""Auth0 Management API client.
+"""Auth0 Management API client (built on the official ``auth0-python`` SDK).
 
-JSON payloads are built as Python dicts (never via string formatting) so
-special characters in user-supplied values cannot inject malformed JSON. httpx
-is configured with explicit timeouts so requests never hang indefinitely.
-
-Every path segment that originates from user input is validated upstream
-(see ``validators.py``) and URL-encoded here before interpolation.
+The SDK is synchronous, so every call runs in a worker thread via
+``asyncio.to_thread`` to keep the FastAPI event loop unblocked. A fresh
+``Auth0`` client is created per call from the cached M2M token (see
+``mgmt_token``). JSON bodies are plain dicts and user-supplied ids are passed
+as SDK arguments (the SDK URL-encodes path segments), so no manual encoding or
+string-built JSON is needed.
 """
+import asyncio
 import logging
-from typing import List, Optional
+from typing import Any, Callable, List, Optional
 
-import httpx
+from auth0.exceptions import Auth0Error
+from auth0.management import Auth0
 
 from .config import Settings, get_settings
 from .mgmt_token import ManagementTokenProvider, get_token_provider
 from .models import OrgMember, OrgRole, OrgSummary
-from .validators import url_encode
 
 log = logging.getLogger("upcontent.mgmt_service")
-
-_TIMEOUT = httpx.Timeout(connect=10.0, read=15.0, write=10.0, pool=10.0)
 
 
 class ManagementService:
@@ -27,41 +26,39 @@ class ManagementService:
         self._s = settings
         self._tokens = token_provider
 
-    @property
-    def _base(self) -> str:
-        return f"https://{self._s.auth0_domain}/api/v2"
-
-    async def _client(self) -> httpx.AsyncClient:
+    async def _client(self) -> Auth0:
+        """A Management API client bound to a fresh (cached) M2M token."""
         token = await self._tokens.get_token()
-        return httpx.AsyncClient(
-            base_url=self._base,
-            timeout=_TIMEOUT,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-        )
+        return Auth0(self._s.auth0_domain, token)
+
+    async def _call(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Run a synchronous SDK method in a worker thread."""
+        return await asyncio.to_thread(fn, *args, **kwargs)
 
     # ── Organization plan (metadata) ──────────────────────────────────
 
     async def update_org_plan(self, org_id: str, plan: str) -> None:
-        """PATCH org metadata.selected_plan. Requires update:organizations."""
-        payload = {"metadata": {"selected_plan": plan}}
-        async with await self._client() as client:
-            resp = await client.patch(f"/organizations/{org_id}", json=payload)
-        if resp.status_code >= 300:
-            raise _mgmt_error("update org plan", resp)
+        """Set org metadata.selected_plan. Requires update:organizations."""
+        mgmt = await self._client()
+        try:
+            await self._call(
+                mgmt.organizations.update_organization,
+                org_id,
+                {"metadata": {"selected_plan": plan}},
+            )
+        except Auth0Error as exc:
+            raise _mgmt_error("update org plan", exc)
         log.info("Updated plan for org %s to '%s'", org_id, plan)
 
     async def get_org_plan(self, org_id: str) -> Optional[str]:
-        """GET org and read metadata.selected_plan. Requires read:organizations."""
-        async with await self._client() as client:
-            resp = await client.get(f"/organizations/{org_id}")
-        if resp.status_code >= 300:
-            log.warning("Could not fetch org [%s] for plan lookup: %s", org_id, resp.status_code)
+        """Read org metadata.selected_plan. Requires read:organizations."""
+        mgmt = await self._client()
+        try:
+            org = await self._call(mgmt.organizations.get_organization, org_id)
+        except Auth0Error as exc:
+            log.warning("Could not fetch org [%s] for plan lookup: %s", org_id, exc.status_code)
             return None
-        meta = (resp.json() or {}).get("metadata") or {}
-        return meta.get("selected_plan")
+        return ((org or {}).get("metadata") or {}).get("selected_plan")
 
     # ── Connections ───────────────────────────────────────────────────
 
@@ -70,35 +67,31 @@ class ManagementService:
 
         Prefers the exact name; falls back to the first strategy=auth0 conn.
         """
-        params = {
-            "strategy": "auth0",
-            "fields": "id,name",
-            "include_fields": "true",
-            "per_page": "100",
-            "page": "0",
-        }
-        async with await self._client() as client:
-            resp = await client.get("/connections", params=params)
-        if resp.status_code >= 300:
-            log.warning("getDefaultDatabaseConnectionId failed [%s]", resp.status_code)
+        mgmt = await self._client()
+        try:
+            conns = await self._call(
+                mgmt.connections.all, strategy="auth0", fields=["id", "name"], include_fields=True
+            )
+        except Auth0Error as exc:
+            log.warning("getDefaultDatabaseConnectionId failed [%s]", exc.status_code)
             return None
-        arr = resp.json()
-        if not isinstance(arr, list) or not arr:
+        if not isinstance(conns, list) or not conns:
             log.warning("No auth0-strategy connections found in tenant")
             return None
-        for node in arr:
+        for node in conns:
             if node.get("name") == "Username-Password-Authentication":
                 return node.get("id")
-        return arr[0].get("id")
+        return conns[0].get("id")
 
     async def enable_connection_on_organization(
         self, org_id: str, connection_id: str, auto_membership: bool
     ) -> None:
-        payload = {"connection_id": connection_id, "assign_membership_on_login": auto_membership}
-        async with await self._client() as client:
-            resp = await client.post(f"/organizations/{org_id}/enabled_connections", json=payload)
-        if resp.status_code >= 300:
-            raise _mgmt_error("enable connection on org", resp)
+        mgmt = await self._client()
+        body = {"connection_id": connection_id, "assign_membership_on_login": auto_membership}
+        try:
+            await self._call(mgmt.organizations.create_organization_connection, org_id, body)
+        except Auth0Error as exc:
+            raise _mgmt_error("enable connection on org", exc)
         log.info("Enabled connection '%s' on org '%s' (auto-membership=%s)",
                  connection_id, org_id, auto_membership)
 
@@ -111,12 +104,15 @@ class ManagementService:
         to authenticate the invited user). auto-membership is false so only
         explicitly invited users join.
         """
-        payload = {"name": name, "display_name": display_name}
-        async with await self._client() as client:
-            resp = await client.post("/organizations", json=payload)
-        if resp.status_code >= 300:
-            raise _mgmt_error("create organization", resp)
-        org_id = (resp.json() or {}).get("id")
+        mgmt = await self._client()
+        try:
+            org = await self._call(
+                mgmt.organizations.create_organization,
+                {"name": name, "display_name": display_name},
+            )
+        except Auth0Error as exc:
+            raise _mgmt_error("create organization", exc)
+        org_id = (org or {}).get("id")
         if not org_id:
             raise RuntimeError("Auth0 returned no organization ID")
         log.info("Created organization '%s' (slug: %s) id=%s", display_name, name, org_id)
@@ -133,81 +129,80 @@ class ManagementService:
         return org_id
 
     async def list_organizations_for_user(self, user_id: str) -> List[OrgSummary]:
-        """GET /users/{id}/organizations. Requires read:organizations."""
-        async with await self._client() as client:
-            resp = await client.get(
-                f"/users/{url_encode(user_id)}/organizations",
-                params={"per_page": "50", "page": "0"},
-            )
-        if resp.status_code >= 300:
+        """List the orgs a user belongs to. Requires read:organizations."""
+        mgmt = await self._client()
+        try:
+            body = await self._call(mgmt.users.list_organizations, user_id)
+        except Auth0Error as exc:
             log.warning("listOrganizationsForUser failed [%s] for user %s",
-                        resp.status_code, user_id)
+                        exc.status_code, user_id)
             return []
-        return _to_org_summaries(resp.json())
+        return _to_org_summaries(body)
 
     # ── Invitations ───────────────────────────────────────────────────
 
     async def invite_user_to_organization(
         self, org_id: str, inviter_name: str, invitee_email: str, client_id: str
     ) -> None:
-        payload = {
+        mgmt = await self._client()
+        body = {
             "inviter": {"name": inviter_name},
             "invitee": {"email": invitee_email},
             "client_id": client_id,
             "send_invitation_email": True,
         }
-        async with await self._client() as client:
-            resp = await client.post(f"/organizations/{org_id}/invitations", json=payload)
-        if resp.status_code >= 300:
-            raise _mgmt_error("send invitation", resp)
+        try:
+            await self._call(mgmt.organizations.create_organization_invitation, org_id, body)
+        except Auth0Error as exc:
+            raise _mgmt_error("send invitation", exc)
         log.info("Invitation sent to '%s' for org '%s'", invitee_email, org_id)
 
     # ── Members ────────────────────────────────────────────────────────
 
     async def add_member_to_organization(self, org_id: str, user_id: str) -> None:
-        """POST /organizations/{org_id}/members. Requires create:organization_members.
-
-        user_id goes in the JSON body (not the URL), so no path-encoding is
-        needed; the dict payload is injection-safe.
-        """
-        payload = {"members": [user_id]}
-        async with await self._client() as client:
-            resp = await client.post(f"/organizations/{org_id}/members", json=payload)
-        if resp.status_code >= 300:
-            raise _mgmt_error("add member to org", resp)
+        """Add a member. Requires create:organization_members."""
+        mgmt = await self._client()
+        try:
+            await self._call(
+                mgmt.organizations.create_organization_members, org_id, {"members": [user_id]}
+            )
+        except Auth0Error as exc:
+            raise _mgmt_error("add member to org", exc)
         log.info("Added member %s to org %s", user_id, org_id)
 
     # ── Org member roles ──────────────────────────────────────────────
 
     async def list_tenant_roles(self) -> List[OrgRole]:
-        async with await self._client() as client:
-            resp = await client.get("/roles", params={"per_page": "100", "page": "0"})
-        if resp.status_code >= 300:
-            log.warning("listTenantRoles failed [%s]", resp.status_code)
+        mgmt = await self._client()
+        try:
+            body = await self._call(mgmt.roles.list, per_page=100)
+        except Auth0Error as exc:
+            log.warning("listTenantRoles failed [%s]", exc.status_code)
             return []
-        return _to_roles(resp.json())
+        return _to_roles(body)
 
     async def get_roles_for_org_member(self, org_id: str, user_id: str) -> List[OrgRole]:
-        async with await self._client() as client:
-            resp = await client.get(
-                f"/organizations/{org_id}/members/{url_encode(user_id)}/roles"
+        mgmt = await self._client()
+        try:
+            body = await self._call(
+                mgmt.organizations.all_organization_member_roles, org_id, user_id
             )
-        if resp.status_code >= 300:
+        except Auth0Error as exc:
             log.warning("getRolesForOrgMember failed [%s] org=%s user=%s",
-                        resp.status_code, org_id, user_id)
+                        exc.status_code, org_id, user_id)
             return []
-        return _to_roles(resp.json())
+        return _to_roles(body)
 
     async def list_org_members_with_roles(self, org_id: str) -> List[OrgMember]:
-        async with await self._client() as client:
-            resp = await client.get(
-                f"/organizations/{org_id}/members",
-                params={"per_page": "100", "page": "0"},
+        mgmt = await self._client()
+        try:
+            body = await self._call(
+                mgmt.organizations.all_organization_members,
+                org_id, per_page=100, page=0, include_totals=False,
             )
-        if resp.status_code >= 300:
-            log.warning("listOrgMembersWithRoles failed [%s] org=%s", resp.status_code, org_id)
+        except Auth0Error as exc:
+            log.warning("listOrgMembersWithRoles failed [%s] org=%s", exc.status_code, org_id)
             return []
-        body = resp.json()
         arr = body.get("members") if isinstance(body, dict) else body
         if not isinstance(arr, list):
             return []
@@ -236,13 +231,14 @@ class ManagementService:
     ) -> None:
         if not role_ids:
             return
-        payload = {"roles": role_ids}
-        async with await self._client() as client:
-            resp = await client.post(
-                f"/organizations/{org_id}/members/{url_encode(user_id)}/roles", json=payload
+        mgmt = await self._client()
+        try:
+            await self._call(
+                mgmt.organizations.create_organization_member_roles,
+                org_id, user_id, {"roles": role_ids},
             )
-        if resp.status_code >= 300:
-            raise _mgmt_error("assign roles", resp)
+        except Auth0Error as exc:
+            raise _mgmt_error("assign roles", exc)
         log.info("Assigned %d role(s) to user %s in org %s", len(role_ids), user_id, org_id)
 
     async def remove_roles_from_org_member(
@@ -250,15 +246,14 @@ class ManagementService:
     ) -> None:
         if not role_ids:
             return
-        payload = {"roles": role_ids}
-        async with await self._client() as client:
-            resp = await client.request(
-                "DELETE",
-                f"/organizations/{org_id}/members/{url_encode(user_id)}/roles",
-                json=payload,
+        mgmt = await self._client()
+        try:
+            await self._call(
+                mgmt.organizations.delete_organization_member_roles,
+                org_id, user_id, {"roles": role_ids},
             )
-        if resp.status_code >= 300:
-            raise _mgmt_error("remove roles", resp)
+        except Auth0Error as exc:
+            raise _mgmt_error("remove roles", exc)
         log.info("Removed %d role(s) from user %s in org %s", len(role_ids), user_id, org_id)
 
 
@@ -270,11 +265,12 @@ class ManagementApiError(RuntimeError):
         super().__init__(f"Failed to {action} [{status_code}]")
 
 
-def _mgmt_error(action: str, resp: httpx.Response) -> ManagementApiError:
+def _mgmt_error(action: str, exc: Auth0Error) -> ManagementApiError:
     # Log details server-side only; never echo Auth0's body to the client.
+    status = getattr(exc, "status_code", 0) or 0
     log.error("Management API error during '%s' [%s]: %s",
-              action, resp.status_code, resp.text[:300])
-    return ManagementApiError(action, resp.status_code)
+              action, status, str(getattr(exc, "message", exc))[:300])
+    return ManagementApiError(action, status)
 
 
 def _to_org_summaries(body) -> List[OrgSummary]:
