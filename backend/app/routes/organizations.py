@@ -10,7 +10,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import tasks
-from ..config import get_settings
+from ..config import CLAIMS_NAMESPACE, get_settings
 from ..mgmt_service import ManagementApiError
 from ..models import CreateOrganizationRequest, InviteRequest, OrgSummary
 from ..security import Principal, get_principal, require_org_admin, require_scopes
@@ -36,11 +36,20 @@ async def create_organization(
     body: CreateOrganizationRequest,
     principal: Principal = Depends(require_scopes("create:organization")),
 ) -> dict:
+    # Self-registration: a plan chosen at signup arrives as the `pending_plan`
+    # token claim (stamped by the post-login Action from the `selected-plan`
+    # Authorize param). Apply it to the new org server-side.
+    pending_plan = principal.claims.get(f"{CLAIMS_NAMESPACE}/pending_plan")
     try:
-        org_id = await tasks.create_organization(
-            body.name, body.display_name, principal.sub
+        org_id, applied_plan = await tasks.create_organization(
+            body.name, body.display_name, principal.sub, pending_plan=pending_plan
         )
-        return {"id": org_id, "name": body.name, "display_name": body.display_name}
+        return {
+            "id": org_id,
+            "name": body.name,
+            "display_name": body.display_name,
+            "selected_plan": applied_plan,
+        }
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except ManagementApiError:

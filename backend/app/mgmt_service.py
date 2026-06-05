@@ -132,14 +132,6 @@ class ManagementService:
             log.error("Could not enable connection on org '%s': %s", org_id, exc)
         return org_id
 
-    async def list_organizations(self) -> List[OrgSummary]:
-        async with await self._client() as client:
-            resp = await client.get("/organizations", params={"per_page": "100", "page": "0"})
-        if resp.status_code >= 300:
-            log.warning("listOrganizations failed [%s]", resp.status_code)
-            return []
-        return _to_org_summaries(resp.json())
-
     async def list_organizations_for_user(self, user_id: str) -> List[OrgSummary]:
         """GET /users/{id}/organizations. Requires read:organizations."""
         async with await self._client() as client:

@@ -28,8 +28,11 @@ onMounted(() => reload().catch((e) => (msg.value = { kind: "error", text: e.mess
 
 async function create() {
   try {
-    await api.createOrg(getToken, slug.value, displayName.value);
-    msg.value = { kind: "success", text: `Created organization "${displayName.value}".` };
+    const org = await api.createOrg(getToken, slug.value, displayName.value);
+    // The backend applies a signup-time plan (from the `pending_plan` token
+    // claim) when it creates the org and reports it back here.
+    const extra = org?.selected_plan ? ` Plan "${org.selected_plan}" applied.` : "";
+    msg.value = { kind: "success", text: `Created organization "${displayName.value}".${extra}` };
     slug.value = "";
     slugEdited.value = false;
     displayName.value = "";

@@ -4,18 +4,23 @@ A teaching reference for real Auth0 patterns: PKCE SPA login, RS256/JWKS token
 validation, and Management API orchestration from a trusted backend.
 **DEMO — not for production.** Do not enter real credentials or protect real data.
 
-Two branded SPAs share one identity backend: **UpContent** (Vue, :3000) and
-**Sniply** (React, :3001). Both have full feature parity.
+Two branded SPAs share one identity backend, each with its own Auth0 client and
+API audience: **UpContent** (Vue, :3000) is the full org/plan/role management
+app; **Sniply** (React, :3001) is a focused login + profile demo. The split
+illustrates per-app audiences and scopes - Sniply requests no org scopes and
+reads its org/role/plan context straight from the token (the post-login action
+stamps it), so it never calls the Management API.
 
 ## Architecture
 
 ```
 UpContent SPA (Vue   :3000) ─┐  PKCE → Auth0 Universal Login
-Sniply    SPA (React :3001) ─┘  └─ user access token (aud = https://upcontent-api)
+Sniply    SPA (React :3001) ─┘  └─ user access token
+        │   (aud = https://upcontent-api  |  https://sniply-api)
         │  Authorization: Bearer <access token>
         ▼
 FastAPI resource server (:3003)
-  • validate JWT (RS256 / JWKS, iss, aud, exp)
+  • validate JWT (RS256 / JWKS, iss, aud, exp); accepts either app audience
   • authorize: baseline token scope  +  per-org ownership (live check)
   • mint M2M Management token (cached) ──▶ Auth0 Management API v2
         ▼
@@ -33,7 +38,6 @@ pip install -r requirements.txt
 set -a && source .env && set +a
 uvicorn app.main:app --host 127.0.0.1 --port 3003
 # curl -s http://127.0.0.1:3003/healthz  →  {"status":"ok"}
-pytest                   # validators + JWT validation (mocked JWKS)
 
 # UpContent SPA (Vue) — port 3000
 cd ../frontend-upcontent-vue && cp .env.example .env && npm install && npm run dev
@@ -42,48 +46,89 @@ cd ../frontend-upcontent-vue && cp .env.example .env && npm install && npm run d
 cd ../frontend-sniply-react && cp .env.example .env && npm install && npm run dev
 ```
 
-Each frontend `.env` needs: `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID` (that
-app's SPA client id), `VITE_AUTH0_AUDIENCE=https://upcontent-api`, and
-`VITE_API_BASE_URL=http://127.0.0.1:3003`. All `VITE_*` values are public.
+### Environment / client map
 
-On either SPA: **Log in** → **Create** an organization (you become its owner) →
-**Plans** (set a plan) → **Roles** (assign/remove) → **Invite** a teammate.
+Each app authenticates with its own Auth0 client and requests its own API
+audience. Wire the env values to these Auth0 objects (SPA client ids are public;
+the M2M secret is server-side only):
 
-## API routes
+| Env var | Auth0 object | Used by |
+|---|---|---|
+| `frontend-upcontent-vue` → `VITE_AUTH0_CLIENT_ID` | `UpContent SPA` (SPA, auth=none) | UpContent SPA :3000 |
+| `frontend-upcontent-vue` → `VITE_AUTH0_AUDIENCE` | `https://upcontent-api` | UpContent token audience |
+| `frontend-sniply-react` → `VITE_AUTH0_CLIENT_ID` | `Sniply` (SPA, auth=none) | Sniply SPA :3001 |
+| `frontend-sniply-react` → `VITE_AUTH0_AUDIENCE` | `https://sniply-api` | Sniply token audience |
+| `backend` → `AUTH0_MGMT_CLIENT_ID` / `_SECRET` | `UpC Services - MGM API` (M2M) | backend → Management API v2 |
+| `backend` → `AUTH0_SPA_CLIENT_ID` | `UpContent SPA` | invitation link target |
+| `backend` → `AUTH0_API_AUDIENCE` | `https://upcontent-api,https://sniply-api` | audiences the API accepts |
 
-| Method | Path | Token scope | Per-org check |
-|---|---|---|---|
-| GET  | `/api/me` | authenticated | — |
-| GET  | `/api/plans` | authenticated | — |
-| GET  | `/api/organizations` | `read:organization` | returns only your orgs |
-| POST | `/api/organizations` | `create:organization` | — (you become owner) |
-| POST | `/api/plan/select` | — | owner/admin of `org_id` |
-| GET  | `/api/organizations/{org_id}/roles` | `read:organization` | member of org |
-| POST | `/api/organizations/{org_id}/roles/assign` | — | owner/admin of org |
-| POST | `/api/organizations/{org_id}/roles/remove` | — | owner/admin of org |
-| POST | `/api/organizations/{org_id}/invitations` | — | owner/admin of org |
-| GET  | `/healthz` | public | — |
+All `VITE_*` values are public (shipped to the browser). The backend accepts
+either audience, so both SPAs call the one resource server on
+`VITE_API_BASE_URL=http://127.0.0.1:3003`.
 
+**UpContent**, logged out: browse the public **Plans** pricing page and **Sign
+up for** a plan. This simulates a separate marketing site initiating signup: the
+plan is sent to Auth0 as the `selected-plan` Authorize parameter; the post-login
+Action (**Add Custom Claims**) reads it and stamps a `https://upcontent.com/pending_plan`
+token claim, and the backend applies that to the organization you create - a real
+round-trip through Auth0, nothing pre-stored locally. After signing in: **Create**
+an organization (you become its owner; a plan chosen at signup is applied to it
+automatically) → **Plans** (set/change the plan) → **Roles** (assign/remove) →
+**Invite** a teammate.
+
+**Sniply** is login + profile only: sign in, and the profile shows the org,
+role, and plan carried in your token (no org management).
+
+## API
+
+The two layers are kept distinct: the SPA talks to the backend over these HTTP
+endpoints, and the backend (and only the backend) talks to the Auth0 Management
+API v2 using its M2M token.
+
+### SPA → backend (resource server)
+
+UpContent uses all of these; **Sniply only calls `GET /api/me`** (plus the public
+`GET /api/plans` for its landing teaser), since it does no org management.
+
+| Method | Path | Authorization |
+|---|---|---|
+| GET  | `/api/me` | any valid token (returns identity + org/role/plan from token claims) |
+| GET  | `/api/plans` | public (catalog drives the logged-out pricing page) |
+| GET  | `/api/organizations` | token scope `read:organization` |
+| POST | `/api/organizations` | token scope `create:organization` |
+| POST | `/api/plan/select` | owner/admin of `org_id` (object-level) |
+| GET  | `/api/organizations/{org_id}/roles` | member of org + `read:organization` |
+| POST | `/api/organizations/{org_id}/roles/assign` | owner/admin of org (object-level) |
+| POST | `/api/organizations/{org_id}/roles/remove` | owner/admin of org (object-level) |
+| POST | `/api/organizations/{org_id}/invitations` | owner/admin of org (object-level) |
+| GET  | `/healthz` | public |
+
+### backend → Auth0 Management API v2
+
+Each SPA endpoint composes one or more Management API calls (the SPA never calls
+Auth0 directly):
+
+| SPA endpoint | Management API calls |
+|---|---|
+| `GET /api/organizations` | `GET /users/{id}/organizations`, then `GET /organizations/{id}` per org (plan metadata) |
+| `POST /api/organizations` | `POST /organizations` → `POST /organizations/{id}/members` → `GET /roles` → `POST /organizations/{id}/members/{user}/roles` |
+| `POST /api/plan/select` | membership/role check, then `PATCH /organizations/{id}` (writes `metadata.selected_plan`) |
+| `GET /api/organizations/{id}/roles` | `GET /organizations/{id}/members` (+ `GET .../members/{user}/roles` each), `GET /roles` |
+| `POST .../roles/assign` \| `.../roles/remove` | `POST` \| `DELETE /organizations/{id}/members/{user}/roles` |
+| `POST .../invitations` | `POST /organizations/{id}/invitations` |
+
+Authorization is **object-level**: acting on a specific org is checked live
+against the Management API ("is the caller a member / owner/admin of *this*
+org?"), so a freshly granted role takes effect immediately with no token refresh.
 "Owner/admin" = the caller holds a tenant role named (case-insensitive) `owner`,
 `admin`, `org admin`, `organization admin`, or `upcnt_owner` **within that org**.
-The create-org flow assigns the first such role it finds to the org's creator.
 
-## Design decisions
-
-- **Object-level per-org authorization.** Acting on a specific org (plan, invite,
-  roles) is checked live server-side against the Management API ("is the caller an
-  owner/admin of *this* org?"), not via a token scope. A freshly-granted role
-  takes effect immediately — no token refresh or re-login.
-- **Org-level plan metadata.** A selected plan is stored as organization metadata
-  via the Management API (`PATCH /organizations/{id}`), not on the user — so it
-  belongs to the account, not whoever set it.
-- **Refresh-token-only renewal.** SPAs use rotating refresh tokens with reuse
-  detection (`useRefreshTokens` + `offline_access`); no deprecated silent-iframe
-  fallback. Tokens are never placed in URLs.
-- **No database.** Auth0 is the system of record (users, orgs, roles, metadata).
-  The backend is a stateless resource server that orchestrates the Management API.
-- **Port :3003.** The resource server listens on 127.0.0.1:3003; the two SPAs run
-  on :3000 (Vue) and :3001 (React) and are CORS-allowlisted explicitly (no `*`).
+**Owner uniqueness.** Per the A&D, an organization has exactly **one owner**.
+Auth0 cannot model this constraint, so the **app enforces it**: the create-org
+flow makes the creator the owner, and assigning an owner role
+(`POST .../roles/assign`) first checks the org's members via the Management API
+and rejects (HTTP 409) if a *different* member already holds an owner role;
+ownership must be removed/transferred first.
 
 ## Security notes
 
@@ -100,19 +145,13 @@ The create-org flow assigns the first such role it finds to the org's creator.
 upcontent-auth0-demo/
 ├── backend/                     FastAPI resource server (:3003)
 │   ├── app/{main,security,config,tasks,mgmt_token,mgmt_service,validators,models}.py
-│   ├── app/routes/{me,organizations,plans,roles}.py
-│   └── tests/{test_validators,test_security}.py
+│   └── app/routes/{me,organizations,plans,roles}.py
 ├── frontend-upcontent-vue/      UpContent — Vite + Vue 3 + @auth0/auth0-vue (:3000)
 ├── frontend-sniply-react/       Sniply — Vite + React + @auth0/auth0-react (:3001)
-├── setup/provision_auth0.py     optional Auth0 provisioning via the M2M
-└── docs/                        handoff docs (see below)
+└── setup/provision_auth0.py     optional Auth0 provisioning via the M2M
 ```
 
-## Continuing this project
-
-- [`docs/GAP-ANALYSIS.md`](docs/GAP-ANALYSIS.md) — what is built vs. open, mapped
-  to review feedback.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — prioritized backlog with acceptance
-  criteria + the 3-step migration flow.
-- [`docs/AUTH0-SETUP.md`](docs/AUTH0-SETUP.md) — tenant object map + a values
-  checklist to stand up the tenant.
+`setup/provision_auth0.py` is an **idempotent** provisioning helper: run via the
+server-side M2M, it creates the API (resource server), the SPA application, and
+the org-admin / member roles, and prints exact manual Dashboard steps for
+anything the M2M lacks scope to create (then exits 0 so it can be re-run).
