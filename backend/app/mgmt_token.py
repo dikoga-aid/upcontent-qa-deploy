@@ -1,8 +1,10 @@
 """Machine-to-Machine token provider for the Auth0 Management API.
 
-Fetches a token via the client_credentials grant (audience
-``https://{domain}/api/v2/``), caches it in-process, and refreshes 60s before
-expiry. An ``asyncio.Lock`` ensures only one refresh happens at a time.
+Uses the Auth0 SDK's ``GetToken`` (client_credentials grant, audience
+``https://{domain}/api/v2/``), caches the token in-process, and refreshes 60s
+before expiry. An ``asyncio.Lock`` ensures only one refresh happens at a time.
+The SDK call is synchronous, so it runs in a worker thread via
+``asyncio.to_thread`` to avoid blocking the event loop.
 
 The M2M secret is read from config (backend env only) and is NEVER logged.
 """
@@ -11,7 +13,8 @@ import logging
 import time
 from typing import Optional
 
-import httpx
+from auth0.authentication import GetToken
+from auth0.exceptions import Auth0Error
 
 from .config import Settings, get_settings
 
@@ -41,20 +44,15 @@ class ManagementTokenProvider:
 
     async def _fetch_new_token(self) -> None:
         s = self._settings
-        # Dict payload (never f-string JSON) — injection-safe.
-        payload = {
-            "client_id": s.auth0_mgmt_client_id,
-            "client_secret": s.auth0_mgmt_client_secret,
-            "audience": s.mgmt_audience,
-            "grant_type": "client_credentials",
-        }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
-            resp = await client.post(f"https://{s.auth0_domain}/oauth/token", json=payload)
-        if resp.status_code != 200:
+        get_token = GetToken(
+            s.auth0_domain, s.auth0_mgmt_client_id, client_secret=s.auth0_mgmt_client_secret
+        )
+        try:
+            data = await asyncio.to_thread(get_token.client_credentials, s.mgmt_audience)
+        except Auth0Error as exc:
             # Do not log the secret or full body; just the status.
-            log.error("Failed to fetch M2M token: status=%s", resp.status_code)
-            raise RuntimeError(f"Failed to fetch M2M token: {resp.status_code}")
-        data = resp.json()
+            log.error("Failed to fetch M2M token: status=%s", getattr(exc, "status_code", "?"))
+            raise RuntimeError("Failed to fetch M2M token") from exc
         self._token = data["access_token"]
         self._expires_at = time.time() + int(data.get("expires_in", 86400))
         log.info("Obtained fresh Management API token (expires_in=%ss)",
