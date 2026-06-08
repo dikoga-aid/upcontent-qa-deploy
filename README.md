@@ -69,8 +69,8 @@ either audience, so both SPAs call the one resource server on
 > Each SPA's `index.html` Content-Security-Policy lists the Auth0 tenant host in
 > `connect-src` (the `/oauth/token` code-exchange and refresh-token rotation
 > calls); set it to your tenant domain. Login is a full-page redirect and the
-> SPAs renew via rotating refresh tokens, so no silent-auth iframe is used and
-> the tenant is not listed in `frame-src`.
+> SPAs renew via rotating refresh tokens, so no silent-auth iframe is used
+> (`default-src 'self'` already blocks framing).
 
 **UpContent**, logged out: browse the public **Plans** pricing page and **Sign
 up for** a plan. This simulates a separate marketing site initiating signup: the

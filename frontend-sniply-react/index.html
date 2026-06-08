@@ -9,9 +9,9 @@
       connect-src allows the API + the Auth0 tenant (the /oauth/token
       code-exchange and refresh-token rotation calls). Login is a full-page
       redirect and renewal uses rotating refresh tokens, so no silent-auth
-      iframe is used and frame-src is 'none'. Vite's dev client uses a ws
-      connection and inline styles, hence 'unsafe-inline' for style-src and
-      ws: for connect-src in dev. Tighten further for a real production build.
+      iframe is used (default-src 'self' already blocks framing). Vite's dev
+      client uses a ws connection and inline styles, hence 'unsafe-inline' for
+      style-src and ws: for connect-src in dev. Tighten for a production build.
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -21,7 +21,6 @@
                style-src 'self' 'unsafe-inline';
                img-src 'self' data: https:;
                connect-src 'self' http://127.0.0.1:3003 https://dev-rvvkxpvy18wueufd.us.auth0.com ws://localhost:3001;
-               frame-src 'none';
                base-uri 'self';
                form-action 'self';"
     />
