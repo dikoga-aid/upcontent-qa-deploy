@@ -66,6 +66,12 @@ All `VITE_*` values are public (shipped to the browser). The backend accepts
 either audience, so both SPAs call the one resource server on
 `VITE_API_BASE_URL=http://127.0.0.1:3003`.
 
+> Each SPA's `index.html` Content-Security-Policy lists the Auth0 tenant host in
+> `connect-src` (the `/oauth/token` code-exchange and refresh-token rotation
+> calls); set it to your tenant domain. Login is a full-page redirect and the
+> SPAs renew via rotating refresh tokens, so no silent-auth iframe is used and
+> the tenant is not listed in `frame-src`.
+
 **UpContent**, logged out: browse the public **Plans** pricing page and **Sign
 up for** a plan. This simulates a separate marketing site initiating signup: the
 plan is sent to Auth0 as the `selected-plan` Authorize parameter; the post-login
