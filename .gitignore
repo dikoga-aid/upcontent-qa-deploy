@@ -1,0 +1,30 @@
+# Secrets — NEVER commit. Only .env.example files are tracked.
+.env
+.env.*
+!.env.example
+
+# Auth0 Deploy-CLI config (contains the M2M secret) + exported tenant config
+# (confidential). Keep entirely out of the repo.
+auth0_config/
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Editor / OS / tooling
+.DS_Store
+.idea/
+.vscode/
+.claude/
