@@ -64,6 +64,7 @@ class SelectPlanRequest(BaseModel):
 class InviteRequest(BaseModel):
     email: str
     inviter_name: Optional[str] = None
+    role_ids: List[str] = Field(default_factory=list)
 
 
 class RoleChangeRequest(BaseModel):

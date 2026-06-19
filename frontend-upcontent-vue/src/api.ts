@@ -76,9 +76,10 @@ export const api = {
     request<OrgSummary>(t, "POST", "/api/organizations", { name, display_name }),
   selectPlan: (t: TokenGetter, org_id: string, plan: string) =>
     request<any>(t, "POST", "/api/plan/select", { org_id, plan }),
-  invite: (t: TokenGetter, orgId: string, email: string, inviter_name?: string) =>
+  invite: (t: TokenGetter, orgId: string, email: string, role_ids?: string[], inviter_name?: string) =>
     request<any>(t, "POST", `/api/organizations/${orgId}/invitations`, {
       email,
+      role_ids: role_ids ?? [],
       inviter_name,
     }),
   listRoles: (t: TokenGetter, orgId: string) =>

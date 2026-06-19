@@ -69,11 +69,18 @@ async def invite(
 ) -> dict:
     # NOTE: in production, throttle Management API calls (e.g. invitations) to
     # respect Auth0 rate limits. Omitted here to keep the demo focused on auth.
-    inviter = body.inviter_name or principal.claims.get("name") or "An administrator"
+    inviter = (
+        body.inviter_name
+        or principal.claims.get("name")
+        or principal.claims.get("email")  # fallback when profile name is null
+        or "An administrator"
+    )
+    # auth0_spa_client_id is required at startup (no M2M fallback — that would
+    # silently embed the wrong client_id in the invite link and break PKCE).
     settings = get_settings()
-    client_id = settings.auth0_spa_client_id or settings.auth0_mgmt_client_id
+    client_id = settings.auth0_spa_client_id
     try:
-        await tasks.invite_member(org_id, body.email, inviter, client_id)
+        await tasks.invite_member(org_id, body.email, inviter, client_id, role_ids=body.role_ids)
         return {"status": "sent", "email": body.email}
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

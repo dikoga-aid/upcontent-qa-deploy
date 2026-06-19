@@ -142,20 +142,30 @@ class ManagementService:
     # ── Invitations ───────────────────────────────────────────────────
 
     async def invite_user_to_organization(
-        self, org_id: str, inviter_name: str, invitee_email: str, client_id: str
+        self,
+        org_id: str,
+        inviter_name: str,
+        invitee_email: str,
+        client_id: str,
+        role_ids: Optional[List[str]] = None,
     ) -> None:
         mgmt = await self._client()
-        body = {
+        body: dict = {
             "inviter": {"name": inviter_name},
             "invitee": {"email": invitee_email},
             "client_id": client_id,
             "send_invitation_email": True,
         }
+        if role_ids:
+            body["roles"] = role_ids
         try:
             await self._call(mgmt.organizations.create_organization_invitation, org_id, body)
         except Auth0Error as exc:
             raise _mgmt_error("send invitation", exc)
-        log.info("Invitation sent to '%s' for org '%s'", invitee_email, org_id)
+        log.info(
+            "Invitation sent to '%s' for org '%s' with %d role(s)",
+            invitee_email, org_id, len(role_ids or []),
+        )
 
     # ── Members ────────────────────────────────────────────────────────
 

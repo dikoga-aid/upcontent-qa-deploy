@@ -44,6 +44,7 @@ def _patch_jwks(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("AUTH0_DOMAIN", DOMAIN)
     monkeypatch.setenv("AUTH0_API_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("AUTH0_SPA_CLIENT_ID", "test-spa-client-id")
     get_settings.cache_clear()
     monkeypatch.setattr(security, "_jwks_client", None)
     monkeypatch.setattr(security, "PyJWKClient", _StubJWKClient)

@@ -121,13 +121,19 @@ async def select_plan(org_id: str, plan: str) -> None:
 
 
 async def invite_member(
-    org_id: str, invitee_email: str, inviter_name: str, client_id: str
+    org_id: str,
+    invitee_email: str,
+    inviter_name: str,
+    client_id: str,
+    role_ids: Optional[List[str]] = None,
 ) -> None:
     require_valid_org_id(org_id)
     require_valid_email(invitee_email)
     require_valid_display_name(inviter_name)
+    for rid in (role_ids or []):
+        require_valid_role_id(rid)
     await get_mgmt_service().invite_user_to_organization(
-        org_id, inviter_name, invitee_email, client_id
+        org_id, inviter_name, invitee_email, client_id, role_ids=role_ids or []
     )
 
 

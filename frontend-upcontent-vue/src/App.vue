@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useAuth0 } from "@auth0/auth0-vue";
 import Landing from "./components/Landing.vue";
 import Portal from "./components/Portal.vue";
@@ -20,6 +20,19 @@ const tabs = [
 function doLogout() {
   logout({ logoutParams: { returnTo: window.location.origin } });
 }
+
+// Bug 7: handle Auth0 invitation links. When the SPA is opened with
+// ?invitation=<token>&organization=<org_id> in the URL, drive the Auth0 Vue
+// SDK loginWithRedirect with those params exactly as the official
+// "Accept user invitations" example shows. No manual /authorize redirect.
+onMounted(() => {
+  const params = new URLSearchParams(window.location.search);
+  const invitation = params.get("invitation");
+  const organization = params.get("organization");
+  if (invitation && organization) {
+    loginWithRedirect({ authorizationParams: { invitation, organization } });
+  }
+});
 </script>
 
 <template>

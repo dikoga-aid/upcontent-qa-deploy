@@ -10,6 +10,10 @@
       Login is a full-page redirect and renewal uses rotating refresh tokens, so
       no silent-auth iframe is used (default-src 'self' already blocks framing).
       Vite dev needs ws: + 'unsafe-inline' styles; tighten for production.
+
+      Bug 6 fix: connect-src backend origin is derived from VITE_API_BASE_URL at
+      build time via Vite's %ENV_VAR% substitution so each environment (local,
+      QA, prod) gets exactly its own backend URL — no wildcard.
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -18,7 +22,7 @@
                worker-src 'self' blob:;
                style-src 'self' 'unsafe-inline';
                img-src 'self' data: https:;
-               connect-src 'self' http://127.0.0.1:3003 https://dev-rvvkxpvy18wueufd.us.auth0.com ws://localhost:3000;
+               connect-src 'self' %VITE_API_BASE_URL% https://%VITE_AUTH0_DOMAIN% ws://localhost:3000;
                base-uri 'self';
                form-action 'self';"
     />

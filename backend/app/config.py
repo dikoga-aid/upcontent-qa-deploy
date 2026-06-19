@@ -37,8 +37,10 @@ class Settings(BaseSettings):
     auth0_mgmt_client_secret: str = ""
 
     # SPA client_id used when sending org invitations (so the invite link
-    # targets the right application). Optional; falls back to mgmt client.
-    auth0_spa_client_id: str = ""
+    # targets the right application). Required: an absent value means invite
+    # links would embed the M2M client, silently breaking PKCE acceptance.
+    # The backend refuses to start without this set.
+    auth0_spa_client_id: str
 
     # ── Server ────────────────────────────────────────────────────────
     port: int = 5000

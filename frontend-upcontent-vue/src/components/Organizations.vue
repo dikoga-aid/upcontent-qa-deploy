@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
-import { api, type OrgSummary } from "../api";
+import { api, type OrgRole, type OrgSummary } from "../api";
 import { useTokenGetter } from "../useToken";
 
 // Derive an Auth0 org slug from the display name.
@@ -18,8 +18,28 @@ watch(displayName, (v) => {
   if (!slugEdited.value) slug.value = slugify(v);
 });
 const inviteOrg = ref("");
+const inviteRole = ref("");
+const availableRoles = ref<OrgRole[]>([]);
+const rolesLoading = ref(false);
 const email = ref("");
 const msg = ref<{ kind: string; text: string } | null>(null);
+
+// Load the org's roles whenever the selected org changes (AC 1).
+watch(inviteOrg, async (orgId) => {
+  inviteRole.value = "";
+  availableRoles.value = [];
+  if (!orgId) return;
+  rolesLoading.value = true;
+  try {
+    const data = await api.listRoles(getToken, orgId);
+    availableRoles.value = data.tenant_roles;
+    if (data.tenant_roles.length > 0) inviteRole.value = data.tenant_roles[0].id;
+  } catch {
+    // Non-fatal: invite can still proceed without a pre-selected role.
+  } finally {
+    rolesLoading.value = false;
+  }
+});
 
 async function reload() {
   orgs.value = await api.listOrgs(getToken);
@@ -44,9 +64,11 @@ async function create() {
 
 async function invite() {
   try {
-    await api.invite(getToken, inviteOrg.value, email.value);
+    const roleIds = inviteRole.value ? [inviteRole.value] : [];
+    await api.invite(getToken, inviteOrg.value, email.value, roleIds);
     msg.value = { kind: "success", text: `Invitation sent to ${email.value}.` };
     email.value = "";
+    inviteRole.value = "";
   } catch (e: any) {
     msg.value = { kind: "error", text: e.message };
   }
@@ -117,6 +139,23 @@ async function invite() {
             </span>
           </div>
           <div class="form-group">
+            <label class="form-label" for="roleSelect">Role</label>
+            <select
+              id="roleSelect"
+              v-model="inviteRole"
+              class="form-input form-select"
+              :disabled="!inviteOrg || rolesLoading"
+            >
+              <option value="" disabled>
+                {{ rolesLoading ? "Loading roles…" : "Choose a role…" }}
+              </option>
+              <option v-for="r in availableRoles" :key="r.id" :value="r.id">
+                {{ r.name }}
+              </option>
+            </select>
+            <span class="form-hint">Role granted to the invitee on acceptance</span>
+          </div>
+          <div class="form-group">
             <label class="form-label" for="inviteEmail">Email address</label>
             <input
               id="inviteEmail"
@@ -129,7 +168,7 @@ async function invite() {
           </div>
           <button
             class="btn btn-primary btn-full"
-            :disabled="!inviteOrg"
+            :disabled="!inviteOrg || !inviteRole"
             @click="invite"
           >
             Send invitation
